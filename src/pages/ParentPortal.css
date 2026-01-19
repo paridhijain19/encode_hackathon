@@ -1,0 +1,575 @@
+/* ========================================
+   User Portal Styles - Organic & Earthy
+   ======================================== */
+
+.parent-portal {
+    background: var(--bg-primary);
+    min-height: 100vh;
+    padding-bottom: 100px; /* Space for bottom nav */
+}
+
+/* Header */
+.portal-header {
+    background: white;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.header-content {
+    flex: 1;
+    margin: 0 16px;
+}
+
+.greeting-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--success);
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(91, 115, 85, 0.2);
+}
+
+.portal-header h1 {
+    font-size: 1.25rem;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.date-text {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.back-btn, .speak-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    transition: all var(--transition);
+    cursor: pointer;
+}
+
+.back-btn:hover, .speak-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+/* Main Content */
+.portal-main {
+    padding: 24px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* Section Cards */
+.section-card {
+    background: white;
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(0,0,0,0.03);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.section-header h2 {
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.see-all {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* Quick Actions Grid */
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.quick-action-card {
+    background: white;
+    border: none;
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.quick-action-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.action-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.quick-action-card span.action-label {
+    color: white; /* Text color for cards with background */
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+/* Schedule List */
+.schedule-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.schedule-item {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: 16px;
+    transition: all var(--transition);
+    border: 1px solid transparent;
+}
+
+.schedule-item.done {
+    background: rgba(91, 115, 85, 0.08);
+    opacity: 0.8;
+}
+
+.schedule-time {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    width: 80px;
+}
+
+.schedule-icon {
+    font-size: 1.25rem;
+    margin-right: 12px;
+}
+
+.schedule-activity {
+    flex: 1;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.schedule-check {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid var(--border-color);
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: white;
+    transition: all var(--transition);
+}
+
+.schedule-item.done .schedule-check {
+    background: var(--success);
+    border-color: var(--success);
+}
+
+.check-empty {
+    width: 100%;
+    height: 100%;
+}
+
+/* Voice FAB */
+.voice-fab {
+    position: fixed;
+    bottom: 90px;
+    right: 24px;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--secondary);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 20px rgba(193, 127, 89, 0.4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 900;
+    transition: all var(--transition);
+}
+
+.voice-fab span {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.voice-fab:hover {
+    transform: scale(1.05);
+    background: var(--color-clay-dark);
+}
+
+.voice-fab.listening {
+    background: var(--color-moss);
+    animation: pulse 1.5s infinite;
+}
+
+/* Bottom Navigation */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 12px 24px 20px;
+    display: flex;
+    justify-content: space-around;
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
+    z-index: 1000;
+}
+
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 8px 12px;
+    border-radius: 12px;
+    transition: all var(--transition);
+}
+
+.nav-item.active {
+    color: var(--primary);
+    background: rgba(91, 115, 85, 0.1);
+}
+
+/* Budget View Styles */
+.budget-overview-card {
+    background: white;
+    border-radius: 24px;
+    padding: 32px 24px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+}
+
+.budget-circle {
+    width: 200px;
+    height: 200px;
+    margin: 0 auto 24px;
+    position: relative;
+}
+
+.budget-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+}
+
+.budget-center .spent {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.budget-center .of {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 4px 0;
+}
+
+.budget-center .total {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.category-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.category-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.category-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 140px;
+}
+
+.category-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.category-name {
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.category-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 4px;
+}
+
+.category-amount {
+    font-weight: 600;
+    width: 70px;
+    text-align: right;
+    font-size: 0.95rem;
+}
+
+.add-expense-btn {
+    width: 100%;
+    padding: 16px;
+    background: var(--secondary);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(193, 127, 89, 0.3);
+}
+
+/* Health & Activities */
+.medicine-list, .activities-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.medicine-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: 16px;
+}
+
+.medicine-item.taken {
+    background: rgba(91, 115, 85, 0.1);
+    border: 1px solid rgba(91, 115, 85, 0.2);
+}
+
+.medicine-check {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    border: 2px solid var(--border-color);
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.medicine-check.checked {
+    background: var(--success);
+    border-color: var(--success);
+    color: white;
+}
+
+.activity-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.activity-icon {
+    font-size: 2rem;
+    width: 60px;
+    height: 60px;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.activity-info {
+    flex: 1;
+}
+
+.activity-info h3 {
+    font-size: 1.1rem;
+    margin-bottom: 4px;
+}
+
+.distance-tag {
+    display: inline-block;
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.join-btn {
+    padding: 8px 16px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+/* Family View */
+.family-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.family-member-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.member-avatar {
+    font-size: 2.5rem;
+    margin-bottom: 4px;
+}
+
+.member-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.member-relation {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.video-call-btn {
+    width: 100%;
+    padding: 20px;
+    background: linear-gradient(135deg, var(--color-ocean) 0%, #4A7A7A 100%);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-size: 1.25rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 24px rgba(91, 138, 138, 0.3);
+    cursor: pointer;
+}
+
+/* Tip Card */
+.tip-card {
+    background: linear-gradient(135deg, #FFFDF5 0%, #FFF9E6 100%);
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.tip-icon {
+    font-size: 1.5rem;
+}
+
+.tip-card p {
+    font-size: 0.95rem;
+    color: #8B7800;
+    line-height: 1.5;
+    margin: 0;
+}
