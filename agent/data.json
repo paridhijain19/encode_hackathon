@@ -1,0 +1,39 @@
+{
+    "user_profile": {
+        "name": "Friend",
+        "age": 65,
+        "location": "Mumbai, India",
+        "interests": [
+            "reading",
+            "morning walks",
+            "spending time with grandchildren",
+            "gardening",
+            "classical music"
+        ],
+        "health_conditions": [],
+        "emergency_contact_name": "",
+        "emergency_contact_phone": ""
+    },
+    "expenses": [],
+    "moods": [],
+    "activities": [],
+    "appointments": [],
+    "family_alerts": [],
+    "long_term_memory": [
+        {
+            "timestamp": "2026-01-26T12:00:00",
+            "fact": "I enjoy morning walks in the park",
+            "category": "preference"
+        },
+        {
+            "timestamp": "2026-01-26T12:00:00",
+            "fact": "I like to have chai in the mornings",
+            "category": "preference"
+        },
+        {
+            "timestamp": "2026-01-26T12:00:00",
+            "fact": "I love spending time with my grandchildren",
+            "category": "family"
+        }
+    ]
+}

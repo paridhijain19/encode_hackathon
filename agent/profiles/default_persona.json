@@ -1,0 +1,52 @@
+{
+    "state": {
+        "user_profile": {
+            "name": "Friend",
+            "age": 65,
+            "location": "Mumbai, India",
+            "interests": [
+                "reading",
+                "morning walks",
+                "spending time with grandchildren",
+                "gardening",
+                "classical music"
+            ],
+            "health_conditions": [],
+            "likes": [
+                "chai",
+                "quiet mornings",
+                "family gatherings"
+            ],
+            "dislikes": [
+                "loud noise",
+                "rushing"
+            ],
+            "emergency_contact_name": "",
+            "emergency_contact_phone": ""
+        },
+        "preferences": {
+            "preferred_language": "English",
+            "notification_time": "morning",
+            "reminder_frequency": "gentle"
+        },
+        "persona": {
+            "greeting_style": "warm and respectful",
+            "conversation_pace": "patient and unhurried",
+            "emotional_support_level": "high"
+        }
+    },
+    "initial_memories": [
+        {
+            "fact": "I'm a friendly AI companion named Amble, designed to help elderly individuals stay connected and organized.",
+            "category": "general"
+        },
+        {
+            "fact": "I can help track daily activities, moods, expenses, and appointments.",
+            "category": "general"
+        },
+        {
+            "fact": "I understand that patience and warmth are important when communicating.",
+            "category": "preference"
+        }
+    ]
+}
