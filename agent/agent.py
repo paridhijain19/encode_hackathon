@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 from google.adk.agents import Agent, LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.memory import InMemoryMemoryService
-#from opik.integrations.adk import OpikTracer, track_adk_agent_recursive
+from google.adk.tools.google_search_tool import google_search
+from opik.integrations.adk import OpikTracer, track_adk_agent_recursive
 
 # Import local modules
 from agent.tools import (
@@ -149,22 +150,21 @@ async def auto_save_session_to_memory_callback(callback_context: CallbackContext
 import warnings
 warnings.filterwarnings("ignore", message="Tools at indices.*are not compatible with automatic function calling")
 
-# # ==================== OPIK INITIALIZATION ====================
-# # Initialize Opik tracer early so we can use its callbacks
-# opik_tracer = OpikTracer(
-#     project_name="amble-companion",
-#     metadata={"environment": "development", "agent_type": "elderly-companion"}
-# )
+# ==================== OPIK INITIALIZATION ====================
+opik_tracer = OpikTracer(
+    project_name="amble-companion",
+    metadata={"environment": "development", "agent_type": "elderly-companion"}
+)
 
-# # Shared callback list for all sub-agents
-#     OPIK_CALLBACKS = {
-#         "before_agent_callback": opik_tracer.before_agent_callback,
-#         "after_agent_callback": opik_tracer.after_agent_callback,
-#         "before_model_callback": opik_tracer.before_model_callback,
-#         "after_model_callback": opik_tracer.after_model_callback,
-#         "before_tool_callback": opik_tracer.before_tool_callback,
-#         "after_tool_callback": opik_tracer.after_tool_callback,
-#     }
+# Shared callback list for all sub-agents
+OPIK_CALLBACKS = {
+    "before_agent_callback": opik_tracer.before_agent_callback,
+    "after_agent_callback": opik_tracer.after_agent_callback,
+    "before_model_callback": opik_tracer.before_model_callback,
+    "after_model_callback": opik_tracer.after_model_callback,
+    "before_tool_callback": opik_tracer.before_tool_callback,
+    "after_tool_callback": opik_tracer.after_tool_callback,
+}
 
 # ==================== SUB-AGENTS ====================
 
@@ -299,16 +299,16 @@ root_agent = Agent(
         # Long-term memory (custom implementation)
         remember_fact,
         recall_memories,
-        load_memory,
+        #load_memory,
         google_search,
     ],
-    # # Root agent uses multiple before/after callbacks
-    # before_agent_callback=[initialize_user_context, opik_tracer.before_agent_callback],
-    # after_agent_callback=[auto_save_session_to_memory_callback, opik_tracer.after_agent_callback],
-    # # Standard OPIK callbacks
-    # before_model_callback=opik_tracer.before_model_callback,
-    # after_model_callback=opik_tracer.after_model_callback,
-    # before_tool_callback=opik_tracer.before_tool_callback,
-    # after_tool_callback=opik_tracer.after_tool_callback,
+    # Root agent uses multiple before/after callbacks
+    before_agent_callback=[initialize_user_context, opik_tracer.before_agent_callback],
+    after_agent_callback=[auto_save_session_to_memory_callback, opik_tracer.after_agent_callback],
+    # Standard OPIK callbacks
+    before_model_callback=opik_tracer.before_model_callback,
+    after_model_callback=opik_tracer.after_model_callback,
+    before_tool_callback=opik_tracer.before_tool_callback,
+    after_tool_callback=opik_tracer.after_tool_callback,
 )
 
