@@ -1,0 +1,4 @@
+google-adk
+opik
+pydantic
+rich
