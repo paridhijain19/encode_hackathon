@@ -2,3 +2,7 @@ google-adk
 opik
 pydantic
 rich
+fastapi
+uvicorn[standard]
+mem0ai
+python-dotenv

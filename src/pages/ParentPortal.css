@@ -5,7 +5,8 @@
 .parent-portal {
     background: var(--bg-primary);
     min-height: 100vh;
-    padding-bottom: 100px; /* Space for bottom nav */
+    padding-bottom: 100px;
+    /* Space for bottom nav */
 }
 
 /* Header */
@@ -53,7 +54,8 @@
     margin-top: 2px;
 }
 
-.back-btn, .speak-btn {
+.back-btn,
+.speak-btn {
     width: 44px;
     height: 44px;
     border-radius: 12px;
@@ -67,7 +69,8 @@
     cursor: pointer;
 }
 
-.back-btn:hover, .speak-btn:hover {
+.back-btn:hover,
+.speak-btn:hover {
     background: var(--bg-secondary);
     color: var(--primary);
     border-color: var(--primary);
@@ -87,7 +90,7 @@
     padding: 20px;
     margin-bottom: 20px;
     box-shadow: var(--shadow);
-    border: 1px solid rgba(0,0,0,0.03);
+    border: 1px solid rgba(0, 0, 0, 0.03);
 }
 
 .section-header {
@@ -149,7 +152,8 @@
 }
 
 .quick-action-card span.action-label {
-    color: white; /* Text color for cards with background */
+    color: white;
+    /* Text color for cards with background */
     font-weight: 600;
     font-size: 0.95rem;
 }
@@ -266,7 +270,7 @@
     display: flex;
     justify-content: space-around;
     border-top: 1px solid var(--border-color);
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
     z-index: 1000;
 }
 
@@ -410,7 +414,8 @@
 }
 
 /* Health & Activities */
-.medicine-list, .activities-list {
+.medicine-list,
+.activities-list {
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -572,4 +577,147 @@
     color: #8B7800;
     line-height: 1.5;
     margin: 0;
+}
+
+/* Animations */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 15px rgba(231, 76, 60, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Modal Overlay */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+    padding: 20px;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 24px;
+    max-width: 400px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid #E8E4DD;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #524C44;
+}
+
+.modal-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: #F5F3EF;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #7A7267;
+    transition: all 0.2s;
+}
+
+.modal-close:hover {
+    background: #E8E4DD;
+    color: #524C44;
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+/* Form inputs */
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: #9CAF88 !important;
+    outline: none;
+}
+
+/* Button hover states */
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Activity card hover */
+.activity-card:hover {
+    transform: translateX(4px);
+    background: #FAF9F7;
+}
+
+/* Family member card hover */
+.family-member-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Schedule item hover */
+.schedule-item:hover {
+    background: #FAF9F7;
+}
+
+/* Category item hover */
+.category-item:hover {
+    background: #FAF9F7;
 }

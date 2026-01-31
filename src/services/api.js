@@ -1,0 +1,140 @@
+/**
+ * API Service for Amble Backend
+ * 
+ * Handles all HTTP communication with the FastAPI backend.
+ * Base URL: http://localhost:8000
+ */
+
+const API_BASE = 'http://localhost:8000'
+
+/**
+ * Send a message to the Amble agent
+ * @param {string} message - User's message text
+ * @param {string} userId - Unique user identifier
+ * @param {string|null} sessionId - Optional session ID for conversation continuity
+ * @returns {Promise<{response: string, session_id: string, user_id: string, memories_used: number}>}
+ */
+export async function sendMessage(message, userId = 'default_user', sessionId = null) {
+    try {
+        const response = await fetch(`${API_BASE}/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message,
+                user_id: userId,
+                session_id: sessionId,
+            }),
+        })
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+        }
+
+        return await response.json()
+    } catch (error) {
+        console.error('API Error (sendMessage):', error)
+        throw error
+    }
+}
+
+/**
+ * Get current state from backend (agent status, session info, memory count)
+ * @param {string} userId - User identifier
+ * @returns {Promise<{status: string, user_id: string, session_id: string|null, memory_count: number, agent_ready: boolean}>}
+ */
+export async function getState(userId = 'default_user') {
+    try {
+        const response = await fetch(`${API_BASE}/api/state?user_id=${encodeURIComponent(userId)}`)
+
+        if (!response.ok) {
+            // Return default state if endpoint doesn't exist yet
+            if (response.status === 404) {
+                return {
+                    status: 'unknown',
+                    user_id: userId,
+                    session_id: null,
+                    memory_count: 0,
+                    agent_ready: false,
+                }
+            }
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+
+        return await response.json()
+    } catch (error) {
+        console.error('API Error (getState):', error)
+        // Return default state on error so UI doesn't break
+        return {
+            status: 'error',
+            user_id: userId,
+            session_id: null,
+            memory_count: 0,
+            agent_ready: false,
+        }
+    }
+}
+
+/**
+ * Health check endpoint
+ * @returns {Promise<{status: string, agent: string}>}
+ */
+export async function healthCheck() {
+    try {
+        const response = await fetch(`${API_BASE}/`)
+        return await response.json()
+    } catch (error) {
+        console.error('API Error (healthCheck):', error)
+        return { status: 'error', agent: 'unknown' }
+    }
+}
+
+// ==================== SESSION MANAGEMENT ====================
+
+const SESSION_KEY = 'amble_session_id'
+const USER_KEY = 'amble_user_id'
+
+/**
+ * Save session ID to localStorage
+ * @param {string} sessionId 
+ */
+export function saveSession(sessionId) {
+    if (sessionId) {
+        localStorage.setItem(SESSION_KEY, sessionId)
+    }
+}
+
+/**
+ * Get session ID from localStorage
+ * @returns {string|null}
+ */
+export function getSession() {
+    return localStorage.getItem(SESSION_KEY)
+}
+
+/**
+ * Clear session (for logout/reset)
+ */
+export function clearSession() {
+    localStorage.removeItem(SESSION_KEY)
+}
+
+/**
+ * Save user ID to localStorage
+ * @param {string} userId 
+ */
+export function saveUserId(userId) {
+    if (userId) {
+        localStorage.setItem(USER_KEY, userId)
+    }
+}
+
+/**
+ * Get user ID from localStorage (defaults to 'default_user')
+ * @returns {string}
+ */
+export function getUserId() {
+    return localStorage.getItem(USER_KEY) || 'default_user'
+}

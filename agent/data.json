@@ -1,8 +1,8 @@
 {
     "user_profile": {
-        "name": "Friend",
-        "age": 65,
-        "location": "Mumbai, India",
+        "name": "Lakshmi",
+        "age": 68,
+        "location": "Pune",
         "interests": [
             "reading",
             "morning walks",
@@ -12,13 +12,94 @@
         ],
         "health_conditions": [],
         "emergency_contact_name": "",
-        "emergency_contact_phone": ""
+        "emergency_contact_phone": "",
+        "updated_at": "2026-01-31T21:19:14.564545"
     },
-    "expenses": [],
-    "moods": [],
-    "activities": [],
-    "appointments": [],
-    "family_alerts": [],
+    "expenses": [
+        {
+            "timestamp": "2026-01-31T21:00:11.608534",
+            "amount": 500,
+            "category": "groceries",
+            "description": "vegetables"
+        },
+        {
+            "timestamp": "2026-01-31T21:15:27.135545",
+            "amount": 200,
+            "category": "medicine",
+            "description": "pharmacy"
+        },
+        {
+            "timestamp": "2026-01-31T21:40:45.399858",
+            "amount": 150,
+            "category": "groceries",
+            "description": "vegetables"
+        },
+        {
+            "timestamp": "2026-01-31T21:49:43.644011",
+            "amount": 100,
+            "category": "transportation",
+            "description": "auto rickshaw"
+        }
+    ],
+    "moods": [
+        {
+            "timestamp": "2026-01-31T18:34:37.633160",
+            "mood": "tired",
+            "energy_level": 3,
+            "details": "User expressed feeling tired and lonely"
+        },
+        {
+            "timestamp": "2026-01-31T21:15:56.781878",
+            "mood": "happy",
+            "energy_level": 8,
+            "details": "Feeling very happy today with good energy."
+        },
+        {
+            "timestamp": "2026-01-31T21:40:56.982518",
+            "mood": "peaceful",
+            "energy_level": 7,
+            "details": "feeling relaxed and peaceful"
+        }
+    ],
+    "activities": [
+        {
+            "timestamp": "2026-01-31T21:15:43.711901",
+            "activity_name": "Morning walk in the park",
+            "activity_type": "walking",
+            "duration_minutes": 45,
+            "notes": ""
+        },
+        {
+            "timestamp": "2026-01-31T21:41:11.052825",
+            "activity_name": "Yoga",
+            "activity_type": "exercise",
+            "duration_minutes": 20,
+            "notes": "Morning yoga session"
+        }
+    ],
+    "appointments": [
+        {
+            "id": 1,
+            "created_at": "2026-01-31T21:17:20.730952",
+            "title": "Doctor appointment with Dr. Sharma",
+            "appointment_type": "doctor",
+            "date_time": "2026-02-05 10:30",
+            "location": "City Hospital",
+            "doctor_name": "Dr. Sharma",
+            "notes": "",
+            "status": "scheduled",
+            "reminder_sent": false
+        }
+    ],
+    "family_alerts": [
+        {
+            "timestamp": "2026-01-31T21:17:50.775920",
+            "message": "I completed my morning walk today!",
+            "urgency": "low",
+            "category": "activity",
+            "status": "sent"
+        }
+    ],
     "long_term_memory": [
         {
             "timestamp": "2026-01-26T12:00:00",
@@ -33,6 +114,21 @@
         {
             "timestamp": "2026-01-26T12:00:00",
             "fact": "I love spending time with my grandchildren",
+            "category": "family"
+        },
+        {
+            "timestamp": "2026-01-31T18:12:00.395451",
+            "fact": "My name is Arjun",
+            "category": "general"
+        },
+        {
+            "timestamp": "2026-01-31T18:15:40.718936",
+            "fact": "My daughter Priya is a doctor and lives in Pune.",
+            "category": "family"
+        },
+        {
+            "timestamp": "2026-01-31T21:18:59.667839",
+            "fact": "My grandson's name is Arjun and he is 8 years old. He loves cricket.",
             "category": "family"
         }
     ]

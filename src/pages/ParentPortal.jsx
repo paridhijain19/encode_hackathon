@@ -1,14 +1,44 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Link, Routes, Route, useLocation } from 'react-router-dom'
 import {
     Home, Wallet, Heart, Activity, Users, Mic, Phone, Camera,
-    Calendar, Clock, ChevronLeft, Volume2, Plus, Check, X, Sun, Moon
+    Calendar, Clock, ChevronLeft, Volume2, Plus, Check, X, Sun, Moon,
+    Send, AlertCircle, Bell, MessageCircle, Share2
 } from 'lucide-react'
 import './ParentPortal.css'
+import VoiceButton from '../components/VoiceButton'
+import AgentChat from '../components/AgentChat'
+import { ErrorBoundary, ErrorMessage } from '../components/ErrorBoundary'
+import { LoadingCard } from '../components/LoadingSpinner'
+import { Modal, InputModal } from '../components/Modal'
+import { useAgent } from '../hooks/useAgent'
+import { useAgentPolling } from '../hooks/useAgentPolling'
 
 function ParentPortal() {
     const location = useLocation()
-    const [isListening, setIsListening] = useState(false)
+    const [isChatOpen, setIsChatOpen] = useState(false)
+    const [toast, setToast] = useState(null)
+    
+    // Agent integration
+    const agent = useAgent()
+    const agentState = useAgentPolling(5000) // Poll every 5 seconds
+
+    // Toast helper
+    const showToast = useCallback((message, type = 'success') => {
+        setToast({ message, type })
+        setTimeout(() => setToast(null), 3000)
+    }, [])
+
+    // Enhanced chat that shows toast feedback
+    const chatWithFeedback = useCallback(async (message) => {
+        const result = await agent.chat(message)
+        if (result?.response) {
+            showToast('Done! ✨', 'success')
+            // Refresh state after action
+            setTimeout(() => agentState.refresh(), 500)
+        }
+        return result
+    }, [agent, showToast, agentState])
 
     const currentDate = new Date().toLocaleDateString('en-US', {
         weekday: 'long',
@@ -22,6 +52,9 @@ function ParentPortal() {
         if (hour < 17) return 'Good Afternoon'
         return 'Good Evening'
     }
+
+    // Get user name from profile
+    const userName = agentState.userProfile?.name?.split(' ')[0] || 'Mom'
 
     const navItems = [
         { path: '/parent', icon: Home, label: 'Home' },
@@ -38,6 +71,26 @@ function ParentPortal() {
 
     return (
         <div className="parent-portal">
+            {/* Toast Notification */}
+            {toast && (
+                <div className={`toast toast-${toast.type}`} style={{
+                    position: 'fixed',
+                    top: '20px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: toast.type === 'success' ? '#5B7355' : toast.type === 'error' ? '#C17F59' : '#5B8A8A',
+                    color: 'white',
+                    padding: '12px 24px',
+                    borderRadius: '25px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    zIndex: 1100,
+                    animation: 'slideDown 0.3s ease',
+                    fontWeight: '500'
+                }}>
+                    {toast.message}
+                </div>
+            )}
+
             {/* Header */}
             <header className="portal-header">
                 <Link to="/" className="back-btn">
@@ -45,34 +98,87 @@ function ParentPortal() {
                 </Link>
                 <div className="header-content">
                     <div className="greeting-section">
-                        <h1>{getGreeting()}, Mom!</h1>
+                        <h1>{getGreeting()}, {userName}!</h1>
                     </div>
                     <p className="date-text">{currentDate}</p>
                 </div>
-                <button className="speak-btn">
+                <button className="speak-btn" onClick={() => setIsChatOpen(true)} title="Talk to Amble">
                     <Volume2 size={24} />
                 </button>
             </header>
 
+            {/* Error display if polling fails */}
+            {agentState.error && (
+                <div style={{ padding: '0 16px' }}>
+                    <ErrorMessage 
+                        message="Couldn't connect to Amble. Some features may be limited." 
+                        onRetry={agentState.refresh}
+                    />
+                </div>
+            )}
+
             {/* Main Content */}
             <main className="portal-main">
-                <Routes>
-                    <Route path="/" element={<HomeView />} />
-                    <Route path="/budget" element={<BudgetView />} />
-                    <Route path="/health" element={<HealthView />} />
-                    <Route path="/activities" element={<ActivitiesView />} />
-                    <Route path="/family" element={<FamilyView />} />
-                </Routes>
+                <ErrorBoundary fallbackMessage="We're having trouble loading this page.">
+                    <Routes>
+                        <Route path="/" element={
+                            <HomeView 
+                                agentState={agentState} 
+                                onQuickAction={chatWithFeedback} 
+                                loading={agentState.loading} 
+                                showToast={showToast}
+                            />
+                        } />
+                        <Route path="/budget" element={
+                            <BudgetView 
+                                expenses={agentState.expenses} 
+                                loading={agentState.loading} 
+                                onAction={chatWithFeedback}
+                                showToast={showToast}
+                            />
+                        } />
+                        <Route path="/health" element={
+                            <HealthView 
+                                activities={agentState.activities} 
+                                appointments={agentState.upcomingAppointments} 
+                                onAction={chatWithFeedback}
+                                showToast={showToast}
+                            />
+                        } />
+                        <Route path="/activities" element={
+                            <ActivitiesView 
+                                activities={agentState.activities} 
+                                onAction={chatWithFeedback}
+                                showToast={showToast}
+                            />
+                        } />
+                        <Route path="/family" element={
+                            <FamilyView 
+                                agentState={agentState}
+                                onAction={chatWithFeedback}
+                                showToast={showToast}
+                            />
+                        } />
+                    </Routes>
+                </ErrorBoundary>
             </main>
 
-            {/* Voice FAB */}
-            <button
-                className={`voice-fab ${isListening ? 'listening' : ''}`}
-                onClick={() => setIsListening(!isListening)}
-            >
-                <Mic size={28} />
-                <span>Speak</span>
-            </button>
+            {/* Voice FAB - Opens Chat */}
+            <VoiceButton 
+                onClick={() => setIsChatOpen(true)}
+                isLoading={agent.loading}
+            />
+
+            {/* Agent Chat Overlay */}
+            <AgentChat
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                messages={agent.messages}
+                onSendMessage={agent.chat}
+                isLoading={agent.loading}
+                error={agent.error}
+                memoryCount={agentState?.memoryCount || 0}
+            />
 
             {/* Bottom Navigation */}
             <nav className="bottom-nav">
@@ -92,20 +198,49 @@ function ParentPortal() {
 }
 
 /* Home View */
-function HomeView() {
+function HomeView({ agentState, onQuickAction, loading }) {
     const quickActions = [
-        { icon: '💊', label: 'Took Meds', color: '#5B7355' },
-        { icon: '📞', label: 'Call Son', color: '#5B8A8A' },
-        { icon: '🚶', label: 'Walk Done', color: '#C17F59' },
-        { icon: '📝', label: 'Add Expense', color: '#9CAF88' },
+        { icon: '💊', label: 'Took Meds', color: '#5B7355', message: 'I just took my morning medications' },
+        { icon: '📞', label: 'Call Son', color: '#5B8A8A', message: 'Can you help me call my son?' },
+        { icon: '🚶', label: 'Walk Done', color: '#C17F59', message: 'I just finished my morning walk for 30 minutes' },
+        { icon: '📝', label: 'Add Expense', color: '#9CAF88', message: 'I want to add an expense' },
     ]
 
+    const handleQuickAction = async (action) => {
+        if (onQuickAction) {
+            await onQuickAction(action.message)
+        }
+    }
+
+    // Calculate wellness from activities
+    const todayActivities = agentState?.activities?.filter(a => 
+        a.timestamp?.startsWith(new Date().toISOString().split('T')[0])
+    ) || []
+    const completedGoals = todayActivities.length
+    const totalGoals = 5
+    const wellnessPercent = Math.min(100, Math.round((completedGoals / totalGoals) * 100))
+
+    // Generate schedule from activities and appointments
     const todaySchedule = [
-        { time: '7:30 AM', activity: 'Morning Walk in Park', icon: '🌳', done: true },
-        { time: '9:00 AM', activity: 'Blood Pressure Meds', icon: '💊', done: true },
-        { time: '11:00 AM', activity: 'Tea with Mrs. Gupta', icon: '🍵', done: true },
+        ...(agentState?.activities?.slice(-3).map(a => ({
+            time: new Date(a.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+            activity: a.activity_name || a.description || 'Activity',
+            icon: a.activity_type === 'exercise' ? '🚶' : a.activity_type === 'medication' ? '💊' : '✨',
+            done: true
+        })) || []),
+        ...(agentState?.upcomingAppointments?.slice(0, 2).map(a => ({
+            time: new Date(a.date_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+            activity: a.title,
+            icon: '🏥',
+            done: false
+        })) || [])
+    ]
+
+    // Fallback schedule if no data
+    const displaySchedule = todaySchedule.length > 0 ? todaySchedule : [
+        { time: '7:30 AM', activity: 'Morning Walk in Park', icon: '🌳', done: false },
+        { time: '9:00 AM', activity: 'Blood Pressure Meds', icon: '💊', done: false },
         { time: '4:00 PM', activity: 'Virtual Yoga Class', icon: '🧘', done: false },
-        { time: '8:00 PM', activity: 'Video Call with Sarah', icon: '📱', done: false },
     ]
 
     return (
@@ -117,11 +252,15 @@ function HomeView() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <p style={{ margin: '0 0 4px 0', fontSize: '0.95rem', color: '#524C44' }}>You're doing great nicely today!</p>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#7A7267' }}>3 of 5 goals completed</p>
+                        <p style={{ margin: '0 0 4px 0', fontSize: '0.95rem', color: '#524C44' }}>
+                            {completedGoals > 0 ? "You're doing great today!" : "Let's start your day!"}
+                        </p>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#7A7267' }}>
+                            {completedGoals} of {totalGoals} goals completed
+                        </p>
                     </div>
-                    <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '4px solid #9CAF88', color: '#3D4F38', fontWeight: 'bold' }}>
-                        60%
+                    <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `4px solid ${wellnessPercent >= 60 ? '#9CAF88' : '#E8E4DD'}`, color: '#3D4F38', fontWeight: 'bold' }}>
+                        {wellnessPercent}%
                     </div>
                 </div>
             </section>
@@ -133,6 +272,8 @@ function HomeView() {
                         key={idx}
                         className="quick-action-card"
                         style={{ backgroundColor: action.color }}
+                        onClick={() => handleQuickAction(action)}
+                        disabled={loading}
                     >
                         <span className="action-icon">{action.icon}</span>
                         <span className="action-label">{action.label}</span>
@@ -147,7 +288,7 @@ function HomeView() {
                     <Link to="#" className="see-all">See Full Day</Link>
                 </div>
                 <div className="schedule-list">
-                    {todaySchedule.map((item, idx) => (
+                    {displaySchedule.map((item, idx) => (
                         <div key={idx} className={`schedule-item ${item.done ? 'done' : ''}`}>
                             <span className="schedule-time">{item.time}</span>
                             <span className="schedule-icon">{item.icon}</span>
@@ -170,16 +311,62 @@ function HomeView() {
 }
 
 /* Budget View */
-function BudgetView() {
-    const categories = [
-        { name: 'Groceries', spent: 450, budget: 600, icon: '🥦', color: '#5B7355' },
-        { name: 'Pharmacy', spent: 120, budget: 200, icon: '💊', color: '#C17F59' },
-        { name: 'Utilities', spent: 180, budget: 250, icon: '💡', color: '#5B8A8A' },
-        { name: 'Leisure', spent: 85, budget: 150, icon: '🎨', color: '#9CAF88' },
-    ]
+function BudgetView({ expenses, loading, onAction, showToast }) {
+    const [showAddModal, setShowAddModal] = useState(false)
+    const [newExpense, setNewExpense] = useState({ amount: '', category: 'groceries', description: '' })
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
-    const totalSpent = categories.reduce((sum, c) => sum + c.spent, 0)
-    const totalBudget = categories.reduce((sum, c) => sum + c.budget, 0)
+    // Group expenses by category
+    const categoryBudgets = {
+        groceries: { budget: 600, icon: '🥦', color: '#5B7355', name: 'Groceries' },
+        vegetables: { budget: 600, icon: '🥦', color: '#5B7355', name: 'Groceries' },
+        pharmacy: { budget: 200, icon: '💊', color: '#C17F59', name: 'Pharmacy' },
+        medicine: { budget: 200, icon: '💊', color: '#C17F59', name: 'Pharmacy' },
+        utilities: { budget: 250, icon: '💡', color: '#5B8A8A', name: 'Utilities' },
+        leisure: { budget: 150, icon: '🎨', color: '#9CAF88', name: 'Leisure' },
+        other: { budget: 200, icon: '📦', color: '#7A7267', name: 'Other' },
+    }
+
+    // Calculate spending by category from actual expenses
+    const spendingByCategory = {}
+    expenses.forEach(e => {
+        const cat = (e.category || 'other').toLowerCase()
+        const mappedCat = categoryBudgets[cat]?.name || 'Other'
+        spendingByCategory[mappedCat] = (spendingByCategory[mappedCat] || 0) + (e.amount || 0)
+    })
+
+    // Build categories array
+    const uniqueCategories = ['Groceries', 'Pharmacy', 'Utilities', 'Leisure', 'Other']
+    const categories = uniqueCategories.map(name => {
+        const config = Object.values(categoryBudgets).find(c => c.name === name) || categoryBudgets.other
+        return {
+            name,
+            spent: spendingByCategory[name] || 0,
+            budget: config.budget,
+            icon: config.icon,
+            color: config.color
+        }
+    }).filter(c => c.spent > 0 || c.name === 'Groceries') // Show groceries always, others only if spent
+
+    const totalSpent = Object.values(spendingByCategory).reduce((sum, v) => sum + v, 0)
+    const totalBudget = categories.reduce((sum, c) => sum + c.budget, 0) || 1200
+
+    const handleAddExpense = async () => {
+        if (!newExpense.amount || isNaN(parseFloat(newExpense.amount))) {
+            showToast('Please enter a valid amount', 'error')
+            return
+        }
+        setIsSubmitting(true)
+        try {
+            const message = `I spent ${newExpense.amount} rupees on ${newExpense.category}${newExpense.description ? ` for ${newExpense.description}` : ''}`
+            await onAction(message)
+            setShowAddModal(false)
+            setNewExpense({ amount: '', category: 'groceries', description: '' })
+        } catch (err) {
+            showToast('Failed to add expense', 'error')
+        }
+        setIsSubmitting(false)
+    }
 
     return (
         <div className="budget-view">
@@ -191,26 +378,27 @@ function BudgetView() {
                         <circle
                             cx="50" cy="50" r="45" fill="none"
                             stroke="#C17F59" strokeWidth="8"
-                            strokeDasharray={`${(totalSpent / totalBudget) * 283} 283`}
+                            strokeDasharray={`${Math.min(100, (totalSpent / totalBudget) * 100) * 2.83} 283`}
                             strokeLinecap="round"
                             transform="rotate(-90 50 50)"
                         />
                     </svg>
                     <div className="budget-center">
-                        <span className="spent">${totalSpent}</span>
+                        <span className="spent">₹{totalSpent.toFixed(0)}</span>
                         <span className="of">of</span>
-                        <span className="total">${totalBudget}</span>
+                        <span className="total">₹{totalBudget}</span>
                     </div>
                 </div>
                 <div className="budget-info">
                     <h3>Monthly Expenses</h3>
-                    <p className="remaining">${totalBudget - totalSpent} remaining</p>
+                    <p className="remaining">₹{Math.max(0, totalBudget - totalSpent).toFixed(0)} remaining</p>
                 </div>
             </div>
 
             {/* Categories */}
             <section className="section-card">
                 <h2>💰 By Category</h2>
+                {loading && <p style={{ color: '#7A7267', fontSize: '0.9rem' }}>Loading...</p>}
                 <div className="category-list">
                     {categories.map((cat, idx) => (
                         <div key={idx} className="category-item">
@@ -222,36 +410,172 @@ function BudgetView() {
                                 <div
                                     className="bar-fill"
                                     style={{
-                                        width: `${(cat.spent / cat.budget) * 100}%`,
+                                        width: `${Math.min(100, (cat.spent / cat.budget) * 100)}%`,
                                         backgroundColor: cat.color
                                     }}
                                 />
                             </div>
-                            <span className="category-amount">${cat.spent}</span>
+                            <span className="category-amount">₹{cat.spent.toFixed(0)}</span>
                         </div>
                     ))}
+                    {categories.length === 0 && !loading && (
+                        <p style={{ color: '#7A7267', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>
+                            No expenses yet. Say "I spent 500 rupees on groceries" to start tracking!
+                        </p>
+                    )}
                 </div>
             </section>
 
+            {/* Recent Transactions */}
+            {expenses.length > 0 && (
+                <section className="section-card">
+                    <h2>📋 Recent</h2>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {expenses.slice(-5).reverse().map((e, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #E8E4DD' }}>
+                                <span style={{ color: '#524C44' }}>{e.description || e.category}</span>
+                                <span style={{ fontWeight: '600', color: '#C17F59' }}>₹{e.amount}</span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
             {/* Add Expense */}
-            <button className="add-expense-btn">
+            <button className="add-expense-btn" onClick={() => setShowAddModal(true)}>
                 <Plus size={24} />
                 <span>Add New Expense</span>
             </button>
+
+            {/* Add Expense Modal */}
+            <Modal isOpen={showAddModal} title="Add Expense" onClose={() => setShowAddModal(false)}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '6px', color: '#524C44', fontWeight: '500' }}>Amount (₹)</label>
+                            <input
+                                type="number"
+                                placeholder="e.g., 500"
+                                value={newExpense.amount}
+                                onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                                style={{
+                                    width: '100%',
+                                    padding: '14px',
+                                    border: '2px solid #E8E4DD',
+                                    borderRadius: '12px',
+                                    fontSize: '1.1rem',
+                                    outline: 'none'
+                                }}
+                                autoFocus
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '6px', color: '#524C44', fontWeight: '500' }}>Category</label>
+                            <select
+                                value={newExpense.category}
+                                onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })}
+                                style={{
+                                    width: '100%',
+                                    padding: '14px',
+                                    border: '2px solid #E8E4DD',
+                                    borderRadius: '12px',
+                                    fontSize: '1rem',
+                                    background: 'white',
+                                    outline: 'none'
+                                }}
+                            >
+                                <option value="groceries">🥦 Groceries</option>
+                                <option value="pharmacy">💊 Pharmacy / Medicine</option>
+                                <option value="utilities">💡 Utilities</option>
+                                <option value="leisure">🎨 Leisure</option>
+                                <option value="other">📦 Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '6px', color: '#524C44', fontWeight: '500' }}>Description (optional)</label>
+                            <input
+                                type="text"
+                                placeholder="e.g., vegetables from market"
+                                value={newExpense.description}
+                                onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                                style={{
+                                    width: '100%',
+                                    padding: '14px',
+                                    border: '2px solid #E8E4DD',
+                                    borderRadius: '12px',
+                                    fontSize: '1rem',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+                        <button
+                            onClick={handleAddExpense}
+                            disabled={isSubmitting}
+                            style={{
+                                padding: '16px',
+                                background: isSubmitting ? '#A8A093' : '#5B7355',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '12px',
+                                fontSize: '1.1rem',
+                                fontWeight: '600',
+                                cursor: isSubmitting ? 'wait' : 'pointer',
+                                marginTop: '8px'
+                            }}
+                        >
+                            {isSubmitting ? 'Adding...' : '✓ Add Expense'}
+                        </button>
+                    </div>
+                </Modal>
         </div>
     )
 }
 
 /* Health View */
-function HealthView() {
+function HealthView({ activities, appointments, onAction, showToast }) {
+    const [recordingVital, setRecordingVital] = useState(null)
+    const [vitalValue, setVitalValue] = useState('')
+
+    // Extract medication activities from today
+    const today = new Date().toISOString().split('T')[0]
+    const medActivities = activities.filter(a => 
+        a.activity_type === 'medication' && a.timestamp?.startsWith(today)
+    )
+    
+    // Default medicines list (would come from user profile in production)
     const medicines = [
-        { name: 'Lisinopril (BP)', time: '9:00 AM', taken: true },
-        { name: 'Metformin', time: '2:00 PM', taken: false },
-        { name: 'Vitamin D3', time: '8:00 PM', taken: false },
+        { name: 'Lisinopril (BP)', time: '9:00 AM', taken: medActivities.some(a => a.activity_name?.toLowerCase().includes('lisinopril')) },
+        { name: 'Metformin', time: '2:00 PM', taken: medActivities.some(a => a.activity_name?.toLowerCase().includes('metformin')) },
+        { name: 'Vitamin D3', time: '8:00 PM', taken: medActivities.some(a => a.activity_name?.toLowerCase().includes('vitamin')) },
     ]
 
-    const appointments = [
-        { doctor: 'Dr. Emily Chen (Cardiology)', date: 'Jan 25', time: '10:00 AM', location: 'City Medical Center' },
+    const handleMedTaken = async (med) => {
+        if (onAction && !med.taken) {
+            await onAction(`I just took my ${med.name} medication`)
+            showToast(`${med.name} marked as taken ✓`, 'success')
+        }
+    }
+
+    const vitals = [
+        { key: 'bp', icon: '❤️', label: 'Blood Pressure', placeholder: '120/80', message: (v) => `My blood pressure is ${v}` },
+        { key: 'sugar', icon: '🩸', label: 'Blood Sugar', placeholder: '100', message: (v) => `My blood sugar is ${v}` },
+        { key: 'weight', icon: '⚖️', label: 'Weight', placeholder: '65 kg', message: (v) => `My weight is ${v} kg` },
+        { key: 'temp', icon: '🌡️', label: 'Temperature', placeholder: '98.6', message: (v) => `My temperature is ${v}` },
+    ]
+
+    const handleVitalSubmit = async (vital) => {
+        if (!vitalValue.trim()) {
+            showToast('Please enter a value', 'error')
+            return
+        }
+        await onAction(vital.message(vitalValue))
+        showToast(`${vital.label} recorded: ${vitalValue}`, 'success')
+        setRecordingVital(null)
+        setVitalValue('')
+    }
+
+    // Format appointments
+    const displayAppointments = appointments.length > 0 ? appointments : [
+        { title: 'Dr. Emily Chen (Cardiology)', date_time: '2026-02-15T10:00:00', location: 'City Medical Center' },
     ]
 
     return (
@@ -266,7 +590,11 @@ function HealthView() {
                                 <span className="medicine-name">{med.name}</span>
                                 <span className="medicine-time">{med.time}</span>
                             </div>
-                            <button className={`medicine-check ${med.taken ? 'checked' : ''}`}>
+                            <button 
+                                className={`medicine-check ${med.taken ? 'checked' : ''}`}
+                                onClick={() => handleMedTaken(med)}
+                                style={{ transition: 'all 0.2s' }}
+                            >
                                 {med.taken ? <Check size={24} /> : <div className="check-empty"></div>}
                             </button>
                         </div>
@@ -278,66 +606,246 @@ function HealthView() {
             <section className="section-card">
                 <h2>🩺 Quick Check-in</h2>
                 <div className="health-log-buttons" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <button className="btn btn-outline" style={{ justifyContent: 'flex-start' }}>❤️ Record BP</button>
-                    <button className="btn btn-outline" style={{ justifyContent: 'flex-start' }}>🩸 Blood Sugar</button>
-                    <button className="btn btn-outline" style={{ justifyContent: 'flex-start' }}>⚖️ Weight</button>
-                    <button className="btn btn-outline" style={{ justifyContent: 'flex-start' }}>🌡️ Temperature</button>
+                    {vitals.map((vital) => (
+                        <button 
+                            key={vital.key}
+                            className="btn btn-outline" 
+                            style={{ justifyContent: 'flex-start' }} 
+                            onClick={() => setRecordingVital(vital)}
+                        >
+                            {vital.icon} {vital.label}
+                        </button>
+                    ))}
                 </div>
             </section>
+
+            {/* Vital Input Modal */}
+            <Modal isOpen={!!recordingVital} title={recordingVital ? `Record ${recordingVital.label}` : ''} onClose={() => { setRecordingVital(null); setVitalValue('') }}>
+                {recordingVital && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ textAlign: 'center', fontSize: '3rem' }}>{recordingVital.icon}</div>
+                        <input
+                            type="text"
+                            placeholder={recordingVital.placeholder}
+                            value={vitalValue}
+                            onChange={(e) => setVitalValue(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '16px',
+                                border: '2px solid #E8E4DD',
+                                borderRadius: '12px',
+                                fontSize: '1.2rem',
+                                textAlign: 'center',
+                                outline: 'none'
+                            }}
+                            autoFocus
+                        />
+                        <button
+                            onClick={() => handleVitalSubmit(recordingVital)}
+                            style={{
+                                padding: '16px',
+                                background: '#5B7355',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '12px',
+                                fontSize: '1.1rem',
+                                fontWeight: '600',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            ✓ Record
+                        </button>
+                    </div>
+                )}
+            </Modal>
 
             {/* Upcoming Appointments */}
             <section className="section-card">
                 <h2>🏥 Doctor Visits</h2>
-                {appointments.map((apt, idx) => (
-                    <div key={idx} className="appointment-card" style={{ padding: '12px', background: '#FAF9F7', borderRadius: '12px', marginTop: '12px' }}>
-                        <div className="appointment-date" style={{ display: 'flex', gap: '8px', color: '#5B7355', fontWeight: '600', marginBottom: '8px' }}>
-                            <Calendar size={20} />
-                            <span>{apt.date}</span>
+                {displayAppointments.map((apt, idx) => {
+                    const aptDate = new Date(apt.date_time)
+                    return (
+                        <div key={idx} className="appointment-card" style={{ padding: '12px', background: '#FAF9F7', borderRadius: '12px', marginTop: '12px' }}>
+                            <div className="appointment-date" style={{ display: 'flex', gap: '8px', color: '#5B7355', fontWeight: '600', marginBottom: '8px' }}>
+                                <Calendar size={20} />
+                                <span>{aptDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            </div>
+                            <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem' }}>{apt.title}</h3>
+                            <p style={{ margin: '0 0 4px 0', fontSize: '0.9rem', color: '#7A7267' }}>
+                                <Clock size={14} style={{ display: 'inline', marginRight: '4px' }} /> 
+                                {aptDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            </p>
+                            <p style={{ margin: 0, fontSize: '0.9rem', color: '#7A7267' }}>📍 {apt.location || 'Location TBD'}</p>
                         </div>
-                        <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem' }}>{apt.doctor}</h3>
-                        <p style={{ margin: '0 0 4px 0', fontSize: '0.9rem', color: '#7A7267' }}><Clock size={14} style={{ display: 'inline', marginRight: '4px' }} /> {apt.time}</p>
-                        <p style={{ margin: 0, fontSize: '0.9rem', color: '#7A7267' }}>📍 {apt.location}</p>
-                    </div>
-                ))}
+                    )
+                })}
+            </section>
+
+            {/* Emergency Contact */}
+            <section className="section-card" style={{ background: '#FFF5F5', border: '1px solid #FFD4D4' }}>
+                <h2 style={{ color: '#C17F59' }}>🚨 Emergency</h2>
+                <p style={{ color: '#7A7267', marginBottom: '12px' }}>If you need immediate help:</p>
+                <button
+                    onClick={() => showToast('Calling emergency contact...', 'info')}
+                    style={{
+                        width: '100%',
+                        padding: '14px',
+                        background: '#C17F59',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '12px',
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                    }}
+                >
+                    <Phone size={20} /> Call Family
+                </button>
             </section>
         </div>
     )
 }
 
 /* Activities View */
-function ActivitiesView() {
-    const categories = ['All', '🧘 Yoga', '🎨 Art', '📚 Book Club', '🚶 Walking']
-    const activities = [
+function ActivitiesView({ activities, onAction, showToast }) {
+    const [activeCategory, setActiveCategory] = useState('All')
+    const [showLogModal, setShowLogModal] = useState(false)
+    const [newActivity, setNewActivity] = useState({ type: 'walking', duration: '30' })
+
+    const categories = ['All', '🧘 Yoga', '🎨 Art', '📚 Reading', '🚶 Walking']
+    
+    // Map activities to display format
+    const getActivityIcon = (type) => {
+        const icons = {
+            'exercise': '🚶',
+            'walking': '🚶',
+            'yoga': '🧘',
+            'meditation': '🧘',
+            'social': '👥',
+            'reading': '📚',
+            'art': '🎨',
+            'medication': '💊',
+        }
+        return icons[type?.toLowerCase()] || '✨'
+    }
+
+    // Filter activities by category
+    const filteredActivities = activities.filter(a => {
+        if (activeCategory === 'All') return true
+        const typeMatch = activeCategory.toLowerCase().includes(a.activity_type?.toLowerCase())
+        return typeMatch
+    })
+
+    // Recent activities from backend
+    const recentActivities = filteredActivities.slice(-8).reverse().map(a => ({
+        name: a.activity_name || a.description || 'Activity',
+        time: new Date(a.timestamp).toLocaleString([], { 
+            weekday: 'short', 
+            hour: 'numeric', 
+            minute: '2-digit' 
+        }),
+        duration: a.duration_minutes ? `${a.duration_minutes} min` : '',
+        icon: getActivityIcon(a.activity_type),
+        type: a.activity_type
+    }))
+
+    // Suggested activities (static for now)
+    const suggestedActivities = [
         { name: 'Morning Park Yoga', time: 'Daily 7:00 AM', distance: '0.5 miles', icon: '🧘' },
         { name: 'Community Book Club', time: 'Wed 4:00 PM', distance: '1.2 miles', icon: '📚' },
         { name: 'Senior Art Class', time: 'Fri 10:00 AM', distance: '2.0 miles', icon: '🎨' },
     ]
+
+    const handleLogActivity = async () => {
+        const message = `I just did ${newActivity.type} for ${newActivity.duration} minutes`
+        await onAction(message)
+        showToast(`${newActivity.type} logged! Great job! 🎉`, 'success')
+        setShowLogModal(false)
+        setNewActivity({ type: 'walking', duration: '30' })
+    }
 
     return (
         <div className="activities-view">
             {/* Category Filters */}
             <div className="category-filters" style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '16px' }}>
                 {categories.map((cat, idx) => (
-                    <button key={idx} className={`filter-btn ${idx === 0 ? 'active' : ''}`}
+                    <button 
+                        key={idx} 
+                        className={`filter-btn ${activeCategory === cat ? 'active' : ''}`}
+                        onClick={() => setActiveCategory(cat)}
                         style={{
                             padding: '8px 16px',
                             borderRadius: '20px',
-                            border: idx === 0 ? 'none' : '1px solid #E8E4DD',
-                            background: idx === 0 ? '#5B7355' : 'white',
-                            color: idx === 0 ? 'white' : '#524C44',
+                            border: activeCategory === cat ? 'none' : '1px solid #E8E4DD',
+                            background: activeCategory === cat ? '#5B7355' : 'white',
+                            color: activeCategory === cat ? 'white' : '#524C44',
                             whiteSpace: 'nowrap',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
                         }}>
                         {cat}
                     </button>
                 ))}
             </div>
 
-            {/* Activities List */}
+            {/* Quick Log Button */}
+            <button 
+                onClick={() => setShowLogModal(true)}
+                style={{
+                    width: '100%',
+                    padding: '16px',
+                    background: 'linear-gradient(135deg, #9CAF88 0%, #5B7355 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '16px',
+                    fontSize: '1.1rem',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    marginBottom: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    boxShadow: '0 4px 12px rgba(91, 115, 85, 0.3)'
+                }}
+            >
+                <Plus size={24} /> Log Activity
+            </button>
+
+            {/* Recent Activities from tracking */}
+            <section className="section-card">
+                <h2>✅ Your Activities</h2>
+                {recentActivities.length > 0 ? (
+                    <div className="activities-list">
+                        {recentActivities.map((activity, idx) => (
+                            <div key={idx} className="activity-card">
+                                <span className="activity-icon">{activity.icon}</span>
+                                <div className="activity-info">
+                                    <h3>{activity.name}</h3>
+                                    <p style={{ color: '#7A7267', fontSize: '0.9rem' }}>{activity.time}</p>
+                                    {activity.duration && <span className="distance-tag">{activity.duration}</span>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div style={{ textAlign: 'center', padding: '30px 0', color: '#7A7267' }}>
+                        <p style={{ fontSize: '2rem', marginBottom: '8px' }}>🏃‍♀️</p>
+                        <p>No activities yet today.</p>
+                        <p style={{ fontSize: '0.9rem' }}>Say "I did yoga for 30 minutes" or tap Log Activity above!</p>
+                    </div>
+                )}
+            </section>
+
+            {/* Suggested Activities */}
             <section className="section-card">
                 <h2>📍 Near You</h2>
                 <div className="activities-list">
-                    {activities.map((activity, idx) => (
+                    {suggestedActivities.map((activity, idx) => (
                         <div key={idx} className="activity-card">
                             <span className="activity-icon">{activity.icon}</span>
                             <div className="activity-info">
@@ -345,7 +853,12 @@ function ActivitiesView() {
                                 <p style={{ color: '#7A7267', fontSize: '0.9rem' }}>{activity.time}</p>
                                 <span className="distance-tag">{activity.distance}</span>
                             </div>
-                            <button className="join-btn">View</button>
+                            <button 
+                                className="join-btn"
+                                onClick={() => showToast(`Added ${activity.name} to your list!`, 'success')}
+                            >
+                                Join
+                            </button>
                         </div>
                     ))}
                 </div>
@@ -355,19 +868,135 @@ function ActivitiesView() {
             <div className="suggestion-card" style={{ background: '#EAE2D0', borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
                 <h3 style={{ color: '#524C44', marginBottom: '8px' }}>✨ Just for You</h3>
                 <p style={{ color: '#7A7267', marginBottom: '16px' }}>Since you like Yoga, you might enjoy the new meditation group starting this weekend!</p>
-                <button className="btn btn-primary" style={{ width: '100%' }}>Explore Details</button>
+                <button 
+                    className="btn btn-primary" 
+                    style={{ width: '100%' }}
+                    onClick={() => showToast('Details sent to your chat!', 'info')}
+                >
+                    Explore Details
+                </button>
             </div>
+
+            {/* Log Activity Modal */}
+            <Modal isOpen={showLogModal} title="Log Activity" onClose={() => setShowLogModal(false)}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '8px', color: '#524C44', fontWeight: '500' }}>Activity Type</label>
+                            <select
+                                value={newActivity.type}
+                                onChange={(e) => setNewActivity({ ...newActivity, type: e.target.value })}
+                                style={{
+                                    width: '100%',
+                                    padding: '14px',
+                                    border: '2px solid #E8E4DD',
+                                    borderRadius: '12px',
+                                    fontSize: '1rem',
+                                    background: 'white'
+                                }}
+                            >
+                                <option value="walking">🚶 Walking</option>
+                                <option value="yoga">🧘 Yoga</option>
+                                <option value="reading">📚 Reading</option>
+                                <option value="art">🎨 Art / Crafts</option>
+                                <option value="social">👥 Social Activity</option>
+                                <option value="exercise">💪 Exercise</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '8px', color: '#524C44', fontWeight: '500' }}>Duration (minutes)</label>
+                            <input
+                                type="number"
+                                value={newActivity.duration}
+                                onChange={(e) => setNewActivity({ ...newActivity, duration: e.target.value })}
+                                style={{
+                                    width: '100%',
+                                    padding: '14px',
+                                    border: '2px solid #E8E4DD',
+                                    borderRadius: '12px',
+                                    fontSize: '1rem'
+                                }}
+                            />
+                        </div>
+                        <button
+                            onClick={handleLogActivity}
+                            style={{
+                                padding: '16px',
+                                background: '#5B7355',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '12px',
+                                fontSize: '1.1rem',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                marginTop: '8px'
+                            }}
+                        >
+                            ✓ Log Activity
+                        </button>
+                    </div>
+                </Modal>
         </div>
     )
 }
 
 /* Family View */
-function FamilyView() {
-    const familyMembers = [
-        { name: 'David (Son)', relation: 'Son', lastCall: 'Yesterday', avatar: '👨' },
-        { name: 'Sarah (Daughter)', relation: 'Daughter', lastCall: '3 days ago', avatar: '👩' },
-        { name: 'Grandkids', relation: 'Family', lastCall: '1 week ago', avatar: '👶' },
+function FamilyView({ agentState, onAction, showToast }) {
+    const [isRecording, setIsRecording] = useState(false)
+    const [showMessageModal, setShowMessageModal] = useState(false)
+    const [selectedMember, setSelectedMember] = useState(null)
+    const [messageText, setMessageText] = useState('')
+
+    // Family members from profile or default
+    const familyMembers = agentState?.userProfile?.family_members || [
+        { name: 'David', relation: 'Son', avatar: '👨', phone: '+1-555-0101' },
+        { name: 'Sarah', relation: 'Daughter', avatar: '👩', phone: '+1-555-0102' },
+        { name: 'Grandkids', relation: 'Family', avatar: '👶', phone: null },
     ]
+
+    const handleCall = async (member) => {
+        showToast(`Calling ${member.name}...`, 'info')
+        await onAction(`Can you help me call ${member.name}?`)
+    }
+
+    const handleVideoCall = async () => {
+        showToast('Starting video call...', 'info')
+        await onAction('Can you help me start a video call with my family?')
+    }
+
+    const handleSendMessage = async () => {
+        if (!messageText.trim()) {
+            showToast('Please enter a message', 'error')
+            return
+        }
+        await onAction(`Send a message to ${selectedMember?.name || 'family'}: ${messageText}`)
+        showToast(`Message sent to ${selectedMember?.name || 'family'}! 💌`, 'success')
+        setShowMessageModal(false)
+        setMessageText('')
+        setSelectedMember(null)
+    }
+
+    const handleVoiceNote = async () => {
+        if (isRecording) {
+            // Stop recording
+            setIsRecording(false)
+            showToast('Voice note sent to family! 🎤', 'success')
+            await onAction('I just recorded a voice note for my family')
+        } else {
+            // Start recording
+            setIsRecording(true)
+            showToast('Recording... Tap again to stop', 'info')
+        }
+    }
+
+    const handleSharePhoto = async () => {
+        showToast('Opening camera...', 'info')
+        await onAction('I want to share a photo with my family')
+    }
+
+    const openMessageModal = (member = null) => {
+        setSelectedMember(member)
+        setShowMessageModal(true)
+    }
 
     return (
         <div className="family-view">
@@ -376,33 +1005,119 @@ function FamilyView() {
                 <h2>📞 Quick Call</h2>
                 <div className="family-grid">
                     {familyMembers.map((member, idx) => (
-                        <button key={idx} className="family-member-card">
-                            <span className="member-avatar">{member.avatar}</span>
-                            <span className="member-name">{member.name}</span>
-                            <span className="member-relation">{member.relation}</span>
-                            <span className="last-call" style={{ fontSize: '0.75rem', color: '#A8A093' }}>Last: {member.lastCall}</span>
-                            <Phone size={20} className="call-icon" style={{ marginTop: '8px', color: '#5B8A8A' }} />
+                        <button 
+                            key={idx} 
+                            className="family-member-card"
+                            onClick={() => handleCall(member)}
+                            style={{ cursor: 'pointer', border: 'none', background: 'white', borderRadius: '16px', padding: '16px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+                        >
+                            <span className="member-avatar" style={{ fontSize: '2.5rem', display: 'block', marginBottom: '8px' }}>{member.avatar}</span>
+                            <span className="member-name" style={{ display: 'block', fontWeight: '600', color: '#524C44' }}>{member.name}</span>
+                            <span className="member-relation" style={{ display: 'block', fontSize: '0.85rem', color: '#7A7267', marginBottom: '8px' }}>{member.relation}</span>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                <Phone size={20} style={{ color: '#5B8A8A' }} />
+                                <MessageCircle 
+                                    size={20} 
+                                    style={{ color: '#9CAF88', cursor: 'pointer' }} 
+                                    onClick={(e) => { e.stopPropagation(); openMessageModal(member) }}
+                                />
+                            </div>
                         </button>
                     ))}
                 </div>
             </section>
 
             {/* Video Call */}
-            <button className="video-call-btn" style={{ background: '#5B8A8A' }}>
+            <button 
+                className="video-call-btn" 
+                onClick={handleVideoCall}
+                style={{ 
+                    width: '100%', 
+                    background: 'linear-gradient(135deg, #5B8A8A 0%, #4A7575 100%)', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: '16px', 
+                    padding: '18px', 
+                    fontSize: '1.1rem', 
+                    fontWeight: '600', 
+                    cursor: 'pointer', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    gap: '12px',
+                    marginBottom: '20px',
+                    boxShadow: '0 4px 12px rgba(91, 138, 138, 0.3)'
+                }}
+            >
                 <Camera size={24} />
                 <span>Start Video Call</span>
             </button>
+
+            {/* Quick Message */}
+            <section className="section-card">
+                <h2>💬 Quick Message</h2>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    <button 
+                        onClick={() => openMessageModal()}
+                        style={{
+                            flex: 1,
+                            padding: '14px',
+                            background: '#FAF9F7',
+                            border: '2px solid #E8E4DD',
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            color: '#524C44',
+                            fontWeight: '500'
+                        }}
+                    >
+                        <Send size={20} />
+                        Text Family
+                    </button>
+                    <button 
+                        onClick={() => showToast('Sharing your location with family...', 'info')}
+                        style={{
+                            flex: 1,
+                            padding: '14px',
+                            background: '#FAF9F7',
+                            border: '2px solid #E8E4DD',
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            color: '#524C44',
+                            fontWeight: '500'
+                        }}
+                    >
+                        <Share2 size={20} />
+                        Share Location
+                    </button>
+                </div>
+            </section>
 
             {/* Photo Share */}
             <section className="section-card">
                 <h2>📸 Share a Moment</h2>
                 <div className="photo-actions" style={{ display: 'flex', gap: '16px' }}>
-                    <button className="btn btn-outline" style={{ flex: 1, padding: '20px', flexDirection: 'column', gap: '8px' }}>
+                    <button 
+                        onClick={handleSharePhoto}
+                        className="btn btn-outline" 
+                        style={{ flex: 1, padding: '20px', flexDirection: 'column', gap: '8px', cursor: 'pointer' }}
+                    >
                         <Camera size={32} />
                         <span>Take Photo</span>
                     </button>
-                    <button className="btn btn-outline" style={{ flex: 1, padding: '20px', flexDirection: 'column', gap: '8px' }}>
-                        <span>🖼️</span>
+                    <button 
+                        onClick={() => showToast('Opening gallery...', 'info')}
+                        className="btn btn-outline" 
+                        style={{ flex: 1, padding: '20px', flexDirection: 'column', gap: '8px', cursor: 'pointer' }}
+                    >
+                        <span style={{ fontSize: '2rem' }}>🖼️</span>
                         <span>Gallery</span>
                     </button>
                 </div>
@@ -412,12 +1127,131 @@ function FamilyView() {
             <section className="section-card">
                 <h2>🎤 Voice Note</h2>
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                    <button className="voice-message-btn" style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#C17F59', border: 'none', color: 'white', cursor: 'pointer', boxShadow: '0 4px 12px rgba(193, 127, 89, 0.4)' }}>
+                    <button 
+                        onClick={handleVoiceNote}
+                        className="voice-message-btn" 
+                        style={{ 
+                            width: '80px', 
+                            height: '80px', 
+                            borderRadius: '50%', 
+                            background: isRecording ? '#E74C3C' : '#C17F59', 
+                            border: 'none', 
+                            color: 'white', 
+                            cursor: 'pointer', 
+                            boxShadow: isRecording ? '0 0 0 8px rgba(231, 76, 60, 0.2)' : '0 4px 12px rgba(193, 127, 89, 0.4)',
+                            transition: 'all 0.3s',
+                            animation: isRecording ? 'pulse 1.5s infinite' : 'none'
+                        }}
+                    >
                         <Mic size={32} />
                     </button>
-                    <p className="voice-hint" style={{ marginTop: '16px', color: '#7A7267' }}>Tap to record a message for the family group</p>
+                    <p className="voice-hint" style={{ marginTop: '16px', color: '#7A7267' }}>
+                        {isRecording ? '🔴 Recording... Tap to stop' : 'Tap to record a message for the family group'}
+                    </p>
                 </div>
             </section>
+
+            {/* Emergency Alert */}
+            <section className="section-card" style={{ background: '#FFF5F5', border: '1px solid #FFD4D4' }}>
+                <h2 style={{ color: '#C17F59' }}>🚨 Family Alert</h2>
+                <p style={{ color: '#7A7267', marginBottom: '12px' }}>Send an alert to all family members:</p>
+                <button
+                    onClick={async () => {
+                        showToast('Alert sent to all family members!', 'info')
+                        await onAction('Send an alert to all my family members that I need help')
+                    }}
+                    style={{
+                        width: '100%',
+                        padding: '14px',
+                        background: '#C17F59',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '12px',
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                    }}
+                >
+                    <Bell size={20} /> Send Alert
+                </button>
+            </section>
+
+            {/* Message Modal */}
+            <Modal 
+                isOpen={showMessageModal}
+                title={`Message ${selectedMember?.name || 'Family'}`} 
+                onClose={() => { setShowMessageModal(false); setMessageText(''); setSelectedMember(null) }}
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {selectedMember && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#FAF9F7', borderRadius: '12px' }}>
+                            <span style={{ fontSize: '2rem' }}>{selectedMember.avatar}</span>
+                            <div>
+                                <div style={{ fontWeight: '600', color: '#524C44' }}>{selectedMember.name}</div>
+                                <div style={{ fontSize: '0.9rem', color: '#7A7267' }}>{selectedMember.relation}</div>
+                            </div>
+                        </div>
+                    )}
+                    <textarea
+                        placeholder="Type your message..."
+                        value={messageText}
+                        onChange={(e) => setMessageText(e.target.value)}
+                        rows={4}
+                        style={{
+                            width: '100%',
+                            padding: '14px',
+                            border: '2px solid #E8E4DD',
+                            borderRadius: '12px',
+                            fontSize: '1rem',
+                            resize: 'none',
+                            fontFamily: 'inherit'
+                        }}
+                        autoFocus
+                    />
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <button
+                            onClick={() => { setShowMessageModal(false); setMessageText('') }}
+                            style={{
+                                flex: 1,
+                                padding: '14px',
+                                background: '#E8E4DD',
+                                color: '#524C44',
+                                border: 'none',
+                                borderRadius: '12px',
+                                fontSize: '1rem',
+                                fontWeight: '500',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleSendMessage}
+                            style={{
+                                flex: 1,
+                                padding: '14px',
+                                background: '#5B7355',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '12px',
+                                fontSize: '1rem',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                            }}
+                        >
+                            <Send size={18} /> Send
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     )
 }

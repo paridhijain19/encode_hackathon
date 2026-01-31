@@ -7,6 +7,7 @@ from google.adk.agents import Agent, LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.memory import InMemoryMemoryService
 from google.adk.tools.google_search_tool import google_search
+from google.adk.tools.agent_tool import AgentTool
 from opik.integrations.adk import OpikTracer, track_adk_agent_recursive
 
 # Import local modules
@@ -167,103 +168,139 @@ OPIK_CALLBACKS = {
 }
 
 # ==================== SUB-AGENTS ====================
+# NOTE: Sub-agents are commented out to avoid ADK automatic function calling issues
+# The root_agent now handles all tools directly (flattened architecture)
+# This prevents the "Tool use with function calling is unsupported" error
 
-# Mood & Emotional Wellness Agent
-mood_agent = LlmAgent(
-    name="mood_agent",
+# # Mood & Emotional Wellness Agent
+# mood_agent = LlmAgent(
+#     name="mood_agent",
+#     model=MODEL_STANDARD,
+#     description="Handles emotional conversations, mood tracking, and wellness check-ins",
+#     instruction=MOOD_AGENT_INSTRUCTION,
+#     tools=[track_mood, get_mood_history],
+#     output_key="mood_response",
+#     disallow_transfer_to_peers=True,
+#     **OPIK_CALLBACKS
+# )
+
+# # Activity Tracking & Suggestions Agent
+# activity_agent = LlmAgent(
+#     name="activity_agent",
+#     model=MODEL_STANDARD,
+#     description="Tracks daily activities, suggests activities, and finds local events",
+#     instruction=ACTIVITY_AGENT_INSTRUCTION,
+#     tools=[
+#         record_activity, 
+#         get_activity_history, 
+#         get_activity_suggestions,
+#         google_search,  # For finding local events
+#     ],
+#     output_key="activity_response",
+#     disallow_transfer_to_peers=True,
+#     **OPIK_CALLBACKS
+# )
+
+# # Expense Tracking Agent
+# expense_agent = LlmAgent(
+#     name="expense_agent",
+#     model=MODEL_STANDARD,
+#     description="Helps track and summarize daily expenses",
+#     instruction=EXPENSE_AGENT_INSTRUCTION,
+#     tools=[track_expense, get_expense_summary],
+#     output_key="expense_response",
+#     disallow_transfer_to_peers=True,
+#     **OPIK_CALLBACKS
+# )
+
+# # Appointment Management Agent
+# appointment_agent = LlmAgent(
+#     name="appointment_agent",
+#     model=MODEL_STANDARD,
+#     description="Manages healthcare and personal appointments",
+#     instruction=APPOINTMENT_AGENT_INSTRUCTION,
+#     tools=[schedule_appointment, get_upcoming_appointments, cancel_appointment],
+#     output_key="appointment_response",
+#     disallow_transfer_to_peers=True,
+#     **OPIK_CALLBACKS
+# )
+
+# # Wellness Pattern Analysis Agent
+# wellness_agent = LlmAgent(
+#     name="wellness_agent",
+#     model=MODEL_REASONING,
+#     description="Analyzes patterns, detects concerns, and manages family alerts",
+#     instruction=WELLNESS_AGENT_INSTRUCTION,
+#     tools=[
+#         analyze_wellness_patterns,
+#         send_family_alert,
+#         get_family_alerts_history,
+#         get_mood_history,
+#         get_activity_history,
+#     ],
+#     output_key="wellness_response",
+#     disallow_transfer_to_peers=True,
+#     **OPIK_CALLBACKS
+# )
+
+# # Local Events & Trending Activities Agent  
+# local_events_agent = LlmAgent(
+#     name="local_events_agent",
+#     model=MODEL_STANDARD,
+#     description="Searches for local events, trending activities, and things to do in the user's city",
+#     instruction="""
+#     You help find local events and activities for elderly users.
+#     
+#     When searching:
+#     1. Use Google Search to find senior-friendly events in their area
+#     2. Look for cultural events, community gatherings, walking groups, hobby classes
+#     3. Search for trending activities and popular destinations
+#     4. Consider accessibility and timing
+#     
+#     User Location: {user:location}
+#     User Interests: {user:interests}
+#     
+#     Format results clearly with event name, location, timing, and brief description.
+#     Focus on activities suitable for seniors (50+).
+#     """,
+#     tools=[google_search],
+#     output_key="events_response",
+#     disallow_transfer_to_peers=True,
+#     **OPIK_CALLBACKS
+# )
+
+
+# ==================== SEARCH AGENT (ISOLATED) ====================
+# NOTE: google_search is a built-in Gemini tool that CANNOT be mixed with
+# custom function tools in the same agent. This causes:
+#   "400 INVALID_ARGUMENT: Tool use with function calling is unsupported"
+#
+# SOLUTION: Wrap google_search in a separate LlmAgent, then expose it to
+# root_agent via AgentTool. This creates a clean boundary that ADK can handle.
+
+search_agent = LlmAgent(
+    name="search_agent",
     model=MODEL_STANDARD,
-    description="Handles emotional conversations, mood tracking, and wellness check-ins",
-    instruction=MOOD_AGENT_INSTRUCTION,
-    tools=[track_mood, get_mood_history],
-    output_key="mood_response",
-    disallow_transfer_to_peers=True,
-    **OPIK_CALLBACKS
-)
-
-# Activity Tracking & Suggestions Agent
-activity_agent = LlmAgent(
-    name="activity_agent",
-    model=MODEL_STANDARD,
-    description="Tracks daily activities, suggests activities, and finds local events",
-    instruction=ACTIVITY_AGENT_INSTRUCTION,
-    tools=[
-        record_activity, 
-        get_activity_history, 
-        get_activity_suggestions,
-        google_search,  # For finding local events
-    ],
-    output_key="activity_response",
-    disallow_transfer_to_peers=True,
-    **OPIK_CALLBACKS
-)
-
-# Expense Tracking Agent
-expense_agent = LlmAgent(
-    name="expense_agent",
-    model=MODEL_STANDARD,
-    description="Helps track and summarize daily expenses",
-    instruction=EXPENSE_AGENT_INSTRUCTION,
-    tools=[track_expense, get_expense_summary],
-    output_key="expense_response",
-    disallow_transfer_to_peers=True,
-    **OPIK_CALLBACKS
-)
-
-# Appointment Management Agent
-appointment_agent = LlmAgent(
-    name="appointment_agent",
-    model=MODEL_STANDARD,
-    description="Manages healthcare and personal appointments",
-    instruction=APPOINTMENT_AGENT_INSTRUCTION,
-    tools=[schedule_appointment, get_upcoming_appointments, cancel_appointment],
-    output_key="appointment_response",
-    disallow_transfer_to_peers=True,
-    **OPIK_CALLBACKS
-)
-
-# Wellness Pattern Analysis Agent
-wellness_agent = LlmAgent(
-    name="wellness_agent",
-    model=MODEL_REASONING,
-    description="Analyzes patterns, detects concerns, and manages family alerts",
-    instruction=WELLNESS_AGENT_INSTRUCTION,
-    tools=[
-        analyze_wellness_patterns,
-        send_family_alert,
-        get_family_alerts_history,
-        get_mood_history,
-        get_activity_history,
-    ],
-    output_key="wellness_response",
-    disallow_transfer_to_peers=True,
-    **OPIK_CALLBACKS
-)
-
-# Local Events & Trending Activities Agent  
-local_events_agent = LlmAgent(
-    name="local_events_agent",
-    model=MODEL_STANDARD,
-    description="Searches for local events, trending activities, and things to do in the user's city",
+    description="Searches the web for local events, news, and factual information",
     instruction="""
-    You help find local events and activities for elderly users.
-    
-    When searching:
-    1. Use Google Search to find senior-friendly events in their area
-    2. Look for cultural events, community gatherings, walking groups, hobby classes
-    3. Search for trending activities and popular destinations
-    4. Consider accessibility and timing
-    
-    User Location: {user:location}
-    User Interests: {user:interests}
-    
-    Format results clearly with event name, location, timing, and brief description.
-    Focus on activities suitable for seniors (50+).
-    """,
+You are a search assistant for elderly users.
+Use google_search to find accurate, recent information.
+Focus on:
+- Local events and activities suitable for seniors
+- Health and wellness information
+- News and current events
+- Factual answers to questions
+
+Summarize results clearly in simple language.
+Avoid technical jargon. Be warm and helpful.
+""",
     tools=[google_search],
-    output_key="events_response",
-    disallow_transfer_to_peers=True,
     **OPIK_CALLBACKS
 )
+
+# Wrap search_agent as a tool for root_agent to use safely
+# AgentTool only takes 'agent' parameter - name/description come from the agent itself
+search_tool = AgentTool(agent=search_agent)
 
 
 # ==================== ROOT AGENT ====================
@@ -299,8 +336,8 @@ root_agent = Agent(
         # Long-term memory (custom implementation)
         remember_fact,
         recall_memories,
-        #load_memory,
-        google_search,
+        # Web search (safely wrapped via AgentTool)
+        search_tool,
     ],
     # Root agent uses multiple before/after callbacks
     before_agent_callback=[initialize_user_context, opik_tracer.before_agent_callback],
