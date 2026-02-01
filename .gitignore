@@ -26,3 +26,4 @@ dist-ssr
 agent/_pycache_
 \venv
 .env
+\node_modules
