@@ -1,0 +1,234 @@
+/* Sign-In Component Styles */
+
+.signin-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+
+.signin-modal {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    max-width: 400px;
+    width: 100%;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.signin-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #64748b;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.signin-close:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.signin-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.signin-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.signin-header h2 {
+    margin: 0 0 0.5rem 0;
+    color: #1e293b;
+    font-size: 1.5rem;
+}
+
+.signin-header p {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.95rem;
+}
+
+.signin-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.signin-label {
+    text-align: center;
+    color: #64748b;
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+}
+
+.signin-option {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+}
+
+.signin-option:hover {
+    border-color: #6366f1;
+    background: #f8fafc;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.signin-parent {
+    background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
+    border-color: #c7d2fe;
+}
+
+.signin-parent:hover {
+    border-color: #6366f1;
+    background: linear-gradient(135deg, #eef2ff 0%, #c7d2fe 100%);
+}
+
+.signin-avatar {
+    font-size: 2rem;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.signin-name {
+    flex: 1;
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 1.1rem;
+}
+
+.signin-role {
+    color: #64748b;
+    font-size: 0.85rem;
+    text-transform: capitalize;
+}
+
+/* User Badge (top-right corner) */
+.user-badge {
+    position: relative;
+}
+
+.user-badge-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.user-badge-button:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.user-avatar {
+    font-size: 1.25rem;
+}
+
+.user-name {
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.user-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    z-index: 100;
+    overflow: hidden;
+}
+
+.user-menu-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.user-menu-header span {
+    font-size: 1.5rem;
+}
+
+.user-menu-header strong {
+    display: block;
+    color: #1e293b;
+}
+
+.user-menu-header small {
+    color: #64748b;
+    text-transform: capitalize;
+}
+
+.user-menu-signout {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: none;
+    border: none;
+    text-align: left;
+    color: #ef4444;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: background 0.2s;
+}
+
+.user-menu-signout:hover {
+    background: #fef2f2;
+}

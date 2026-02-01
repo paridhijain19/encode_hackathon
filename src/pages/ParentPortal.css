@@ -721,3 +721,344 @@ textarea:focus {
 .category-item:hover {
     background: #FAF9F7;
 }
+
+/* ========================================
+   Mobile Responsive Styles
+   ======================================== */
+
+/* Tablet and below */
+@media screen and (max-width: 768px) {
+    .parent-portal {
+        padding-bottom: 70px;
+        overflow-x: hidden;
+        width: 100%;
+    }
+
+    .portal-header {
+        padding: 10px 12px;
+    }
+
+    .portal-header h1 {
+        font-size: 1rem;
+    }
+
+    .header-content {
+        margin: 0 10px;
+    }
+
+    .date-text {
+        font-size: 0.7rem;
+    }
+
+    .back-btn,
+    .speak-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+    }
+
+    .portal-main {
+        padding: 12px;
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    .section-card {
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 12px;
+    }
+
+    .section-header {
+        margin-bottom: 12px;
+    }
+
+    .section-header h2 {
+        font-size: 0.95rem;
+    }
+
+    .quick-actions-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .quick-action-card {
+        padding: 14px 12px;
+        border-radius: 12px;
+    }
+
+    .action-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 1.1rem;
+    }
+
+    .quick-action-card span.action-label {
+        font-size: 0.8rem;
+    }
+
+    .schedule-list {
+        gap: 8px;
+    }
+
+    .schedule-item {
+        padding: 10px;
+        border-radius: 10px;
+    }
+
+    .schedule-time {
+        font-size: 0.75rem;
+        width: 60px;
+    }
+
+    .schedule-icon {
+        font-size: 1rem;
+        margin-right: 8px;
+    }
+
+    .schedule-activity {
+        font-size: 0.85rem;
+    }
+
+    .schedule-check {
+        width: 26px;
+        height: 26px;
+    }
+
+    .voice-fab {
+        bottom: 65px;
+        right: 12px;
+        width: 52px;
+        height: 52px;
+    }
+
+    .voice-fab span {
+        font-size: 0.6rem;
+    }
+
+    .bottom-nav {
+        padding: 6px 8px 12px;
+    }
+
+    .nav-item {
+        padding: 5px 8px;
+        font-size: 0.65rem;
+        gap: 2px;
+    }
+
+    .nav-item svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    /* Modal adjustments for mobile */
+    .modal-overlay {
+        padding: 10px;
+    }
+
+    .modal-content {
+        border-radius: 16px;
+        max-height: 90vh;
+    }
+
+    .modal-header {
+        padding: 14px 16px;
+    }
+
+    .modal-header h3 {
+        font-size: 1rem;
+    }
+
+    .modal-body {
+        padding: 16px;
+    }
+}
+
+/* Small phones (max-width: 480px) */
+@media screen and (max-width: 480px) {
+    .parent-portal {
+        padding-bottom: 65px;
+    }
+
+    .portal-header {
+        padding: 8px 10px;
+    }
+
+    .portal-header h1 {
+        font-size: 0.95rem;
+    }
+
+    .header-content {
+        margin: 0 8px;
+    }
+
+    .date-text {
+        font-size: 0.65rem;
+    }
+
+    .back-btn,
+    .speak-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    .portal-main {
+        padding: 10px;
+    }
+
+    .section-card {
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+
+    .section-header h2 {
+        font-size: 0.9rem;
+    }
+
+    .quick-actions-grid {
+        gap: 8px;
+    }
+
+    .quick-action-card {
+        padding: 12px 10px;
+        border-radius: 10px;
+        gap: 8px;
+    }
+
+    .action-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 1rem;
+    }
+
+    .quick-action-card span.action-label {
+        font-size: 0.75rem;
+    }
+
+    .schedule-item {
+        padding: 8px;
+    }
+
+    .schedule-time {
+        font-size: 0.7rem;
+        width: 55px;
+    }
+
+    .schedule-activity {
+        font-size: 0.8rem;
+    }
+
+    .voice-fab {
+        bottom: 60px;
+        right: 10px;
+        width: 48px;
+        height: 48px;
+    }
+
+    .bottom-nav {
+        padding: 5px 6px 10px;
+    }
+
+    .nav-item {
+        padding: 4px 6px;
+        font-size: 0.6rem;
+    }
+
+    .nav-item svg {
+        width: 18px;
+        height: 18px;
+    }
+}
+
+/* Extra small phones (max-width: 375px) */
+@media screen and (max-width: 375px) {
+    .portal-header h1 {
+        font-size: 0.9rem;
+    }
+
+    .portal-main {
+        padding: 8px;
+    }
+
+    .quick-actions-grid {
+        gap: 6px;
+    }
+
+    .quick-action-card {
+        padding: 10px 8px;
+    }
+
+    .action-icon {
+        width: 28px;
+        height: 28px;
+    }
+
+    .quick-action-card span.action-label {
+        font-size: 0.7rem;
+    }
+
+    .section-card {
+        padding: 10px;
+    }
+
+    .bottom-nav {
+        padding: 4px 4px 8px;
+    }
+
+    .nav-item {
+        padding: 3px 5px;
+        font-size: 0.55rem;
+    }
+}
+
+/* Landscape mode on mobile */
+@media screen and (max-height: 500px) and (orientation: landscape) {
+    .portal-header {
+        padding: 6px 12px;
+    }
+
+    .portal-main {
+        padding: 10px;
+    }
+
+    .voice-fab {
+        bottom: 55px;
+        width: 44px;
+        height: 44px;
+    }
+
+    .bottom-nav {
+        padding: 6px 12px 10px;
+    }
+}
+
+/* Touch-friendly enhancements */
+@media (hover: none) and (pointer: coarse) {
+    .quick-action-card:active {
+        transform: scale(0.98);
+    }
+
+    .nav-item:active {
+        transform: scale(0.95);
+    }
+
+    .schedule-item:active {
+        background: #F0EDE8;
+    }
+
+    /* Larger touch targets */
+    .schedule-check {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    /* Remove hover effects on touch devices */
+    .quick-action-card:hover,
+    .schedule-item:hover,
+    .category-item:hover {
+        transform: none;
+        box-shadow: var(--shadow);
+    }
+}

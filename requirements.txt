@@ -6,3 +6,8 @@ fastapi
 uvicorn[standard]
 mem0ai
 python-dotenv
+supabase
+resend
+pywebpush
+apscheduler
+requests

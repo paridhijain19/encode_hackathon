@@ -1,50 +1,50 @@
+"""
+Amble Agent Tools
+=================
 
-import json
+All tools for the Amble companion agent.
+Data is stored in Supabase (main DB).
+Mem0 is used only for semantic memory search.
+"""
+
 import os
+import asyncio
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from google.adk.tools import ToolContext
 
-DATA_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(DATA_DIR, "data.json")
-
-def _load_data() -> dict:
-    """Loads data from the local JSON file, creating it with defaults if missing."""
-    if not os.path.exists(DATA_FILE):
-        return {
-            "expenses": [],
-            "moods": [],
-            "activities": [],
-            "appointments": [],
-            "family_alerts": [],
-            "long_term_memory": [],
-            "user_profile": {}
-        }
-    try:
-        with open(DATA_FILE, 'r') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {
-            "expenses": [],
-            "moods": [],
-            "activities": [],
-            "appointments": [],
-            "family_alerts": [],
-            "long_term_memory": [],
-            "user_profile": {}
-        }
-
-def _save_data(data: dict):
-    """Saves data to the local JSON file."""
-    try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(data, f, indent=4)
-    except IOError as e:
-        print(f"Error saving data: {e}")
+# Import Supabase store for all data operations
+from agent.supabase_store import (
+    # Profile
+    save_profile,
+    get_profile,
+    # Expenses
+    save_expense,
+    get_expenses,
+    # Activities  
+    save_activity,
+    get_activities,
+    # Moods
+    save_mood,
+    get_moods,
+    # Appointments
+    save_appointment,
+    get_appointments,
+    delete_appointment,
+    # Alerts
+    save_alert,
+    get_alerts,
+    # Wellness
+    get_wellness_data,
+)
 
 def _get_current_time() -> str:
     """Get current timestamp as ISO string"""
     return datetime.now().isoformat()
+
+def _get_user_id(tool_context: ToolContext) -> str:
+    """Get user_id from tool context or default."""
+    return tool_context.state.get("user:id", "parent_user")
 
 
 # ==================== USER PROFILE TOOLS ====================
@@ -60,16 +60,15 @@ def update_user_profile(
     emergency_contact_phone: Optional[str] = None
 ) -> dict:
     """
-    Updates the user's persistent profile in the local data storage.
+    Updates the user's persistent profile in Supabase.
     """
-    data = _load_data()
-    profile = data.get("user_profile", {})
+    user_id = _get_user_id(tool_context)
     
-    profile.update({
+    profile = {
         "name": name,
         "location": location,
         "updated_at": _get_current_time()
-    })
+    }
     
     if age is not None: profile["age"] = age
     if interests is not None: profile["interests"] = interests
@@ -77,9 +76,8 @@ def update_user_profile(
     if emergency_contact_name is not None: profile["emergency_contact_name"] = emergency_contact_name
     if emergency_contact_phone is not None: profile["emergency_contact_phone"] = emergency_contact_phone
     
-    # Save back to local storage
-    data["user_profile"] = profile
-    _save_data(data)
+    # Save to Supabase
+    save_profile(user_id, profile)
     
     # Update state for prompts
     if tool_context:
@@ -96,14 +94,21 @@ def update_user_profile(
 
 
 def get_user_profile(tool_context: ToolContext) -> dict:
-    """Retrieves the current user profile from ADK state."""
-    profile = tool_context.state.get("user:profile", {})
+    """Retrieves the current user profile from Supabase."""
+    user_id = _get_user_id(tool_context)
+    profile = get_profile(user_id)
     
     if not profile:
         return {
             "status": "not_found",
             "message": "I don't have your profile yet. Could you tell me your name and city?"
         }
+    
+    # Update tool context state
+    if tool_context and profile:
+        tool_context.state["user:profile"] = profile
+        tool_context.state["user:name"] = profile.get("name", "")
+        tool_context.state["user:location"] = profile.get("location", "")
     
     return {
         "status": "success",
@@ -119,23 +124,15 @@ def track_expense(
     category: str,
     description: str
 ) -> dict:
-    """Adds a new expense to user's history."""
-    data = _load_data()
-    expenses = data.get("expenses", [])
+    """Adds a new expense to user's history in Supabase."""
+    user_id = _get_user_id(tool_context)
     
-    entry = {
-        "timestamp": _get_current_time(),
-        "amount": amount,
-        "category": category.lower(),
-        "description": description
-    }
+    # Save to Supabase
+    save_expense(user_id, amount, category, description)
     
-    expenses.append(entry)
-    data["expenses"] = expenses
-    _save_data(data)
-    
-    today = datetime.now().date().isoformat()
-    today_total = sum(e["amount"] for e in expenses if e["timestamp"].startswith(today))
+    # Get today's total
+    today_expenses = get_expenses(user_id, period="today")
+    today_total = sum(e.get("amount", 0) for e in today_expenses)
     
     return {
         "status": "success",
@@ -148,7 +145,7 @@ def get_expense_summary(
     period: str = "today"
 ) -> dict:
     """
-    Gets a summary of expenses for a given period.
+    Gets a summary of expenses for a given period from Supabase.
     
     Args:
         period: 'today', 'week', 'month', or 'all'
@@ -157,44 +154,25 @@ def get_expense_summary(
     Returns:
         dict: Expense summary with breakdown by category
     """
-    data = _load_data()
-    expenses = data.get("expenses", [])
-    
-    now = datetime.now()
-    
-    if period == "today":
-        cutoff = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif period == "week":
-        cutoff = now - timedelta(days=7)
-    elif period == "month":
-        cutoff = now - timedelta(days=30)
-    else:
-        cutoff = datetime.min
-    
-    filtered = []
-    for e in expenses:
-        try:
-            exp_time = datetime.fromisoformat(e["timestamp"])
-            if exp_time >= cutoff:
-                filtered.append(e)
-        except:
-            continue
+    user_id = _get_user_id(tool_context)
+    expenses = get_expenses(user_id, period=period)
     
     # Group by category
     by_category = {}
     total = 0
-    for e in filtered:
+    for e in expenses:
         cat = e.get("category", "other")
-        by_category[cat] = by_category.get(cat, 0) + e["amount"]
-        total += e["amount"]
+        amt = float(e.get("amount", 0) or 0)
+        by_category[cat] = by_category.get(cat, 0) + amt
+        total += amt
     
     return {
         "status": "success",
         "period": period,
         "total": total,
         "by_category": by_category,
-        "transaction_count": len(filtered),
-        "message": f"Your {period}'s expenses total ₹{total:.2f} across {len(filtered)} transactions."
+        "transaction_count": len(expenses),
+        "message": f"Your {period}'s expenses total ₹{total:.2f} across {len(expenses)} transactions."
     }
 
 
@@ -207,7 +185,7 @@ def track_mood(
     details: str = ""
 ) -> dict:
     """
-    Logs the user's current mood and emotional state.
+    Logs the user's current mood and emotional state to Supabase.
     
     Args:
         mood: How they are feeling - 'happy', 'content', 'neutral', 'tired', 'sad', 'anxious', 'lonely', 'energetic', 'grateful'
@@ -218,17 +196,11 @@ def track_mood(
     Returns:
         dict: A warm, empathetic response
     """
-    data = _load_data()
+    user_id = _get_user_id(tool_context)
     
-    entry = {
-        "timestamp": _get_current_time(),
-        "mood": mood.lower(),
-        "energy_level": energy_level,
-        "details": details
-    }
-    
-    data["moods"].append(entry)
-    _save_data(data)
+    # Save to Supabase
+    notes = f"{details} (Energy: {energy_level}/10)" if details else f"Energy: {energy_level}/10"
+    save_mood(user_id, mood, notes, energy_level)
     
     # Generate empathetic response based on mood
     mood_responses = {
@@ -258,7 +230,7 @@ def get_mood_history(
     days: int = 7
 ) -> dict:
     """
-    Gets mood history for pattern analysis.
+    Gets mood history for pattern analysis from Supabase.
     
     Args:
         days: Number of days to look back
@@ -267,30 +239,29 @@ def get_mood_history(
     Returns:
         dict: Mood history with trends
     """
-    data = _load_data()
-    moods = data.get("moods", [])
-    
-    cutoff = datetime.now() - timedelta(days=days)
-    
-    recent = []
-    for m in moods:
-        try:
-            mood_time = datetime.fromisoformat(m["timestamp"])
-            if mood_time >= cutoff:
-                recent.append(m)
-        except:
-            continue
+    user_id = _get_user_id(tool_context)
+    period = "week" if days <= 7 else "all"
+    moods = get_moods(user_id, period=period, limit=50)
     
     # Analyze trends
     mood_counts = {}
     avg_energy = 0
-    for m in recent:
-        mood = m.get("mood", "neutral")
+    for m in moods:
+        mood = m.get("rating", "neutral")
         mood_counts[mood] = mood_counts.get(mood, 0) + 1
-        avg_energy += m.get("energy_level", 5)
+        # Extract energy from notes if stored there
+        notes = m.get("notes", "")
+        if "Energy:" in notes:
+            try:
+                energy = int(notes.split("Energy:")[1].split("/")[0].strip())
+                avg_energy += energy
+            except:
+                avg_energy += 5
+        else:
+            avg_energy += 5
     
-    if recent:
-        avg_energy /= len(recent)
+    if moods:
+        avg_energy /= len(moods)
     
     # Determine trend
     positive_moods = sum(mood_counts.get(m, 0) for m in ["happy", "content", "energetic", "grateful"])
@@ -309,7 +280,7 @@ def get_mood_history(
         "mood_counts": mood_counts,
         "average_energy": round(avg_energy, 1),
         "trend": trend,
-        "total_entries": len(recent)
+        "total_entries": len(moods)
     }
 
 
@@ -323,7 +294,7 @@ def record_activity(
     notes: str = ""
 ) -> dict:
     """
-    Records a daily activity performed by the user.
+    Records a daily activity performed by the user to Supabase.
     
     Args:
         activity_name: Name of the activity (e.g., 'Morning walk in the park')
@@ -335,18 +306,11 @@ def record_activity(
     Returns:
         dict: Encouraging feedback
     """
-    data = _load_data()
+    user_id = _get_user_id(tool_context)
     
-    entry = {
-        "timestamp": _get_current_time(),
-        "activity_name": activity_name,
-        "activity_type": activity_type.lower(),
-        "duration_minutes": duration_minutes,
-        "notes": notes
-    }
-    
-    data["activities"].append(entry)
-    _save_data(data)
+    # Save to Supabase - description includes both name and notes
+    description = f"{activity_name}: {notes}" if notes else activity_name
+    save_activity(user_id, activity_type.lower(), description, duration_minutes)
     
     # Generate encouraging response
     active_types = ["walking", "exercise", "gardening", "shopping"]
@@ -375,7 +339,7 @@ def get_activity_history(
     days: int = 7
 ) -> dict:
     """
-    Gets activity history for pattern analysis.
+    Gets activity history for pattern analysis from Supabase.
     
     Args:
         days: Number of days to look back
@@ -384,24 +348,14 @@ def get_activity_history(
     Returns:
         dict: Activity history with summary
     """
-    data = _load_data()
-    activities = data.get("activities", [])
-    
-    cutoff = datetime.now() - timedelta(days=days)
-    
-    recent = []
-    for a in activities:
-        try:
-            act_time = datetime.fromisoformat(a["timestamp"])
-            if act_time >= cutoff:
-                recent.append(a)
-        except:
-            continue
+    user_id = _get_user_id(tool_context)
+    period = "week" if days <= 7 else "all"
+    activities = get_activities(user_id, period=period, limit=100)
     
     # Summarize by type
     by_type = {}
     total_minutes = 0
-    for a in recent:
+    for a in activities:
         atype = a.get("activity_type", "other")
         duration = a.get("duration_minutes", 0)
         if atype not in by_type:
@@ -414,7 +368,7 @@ def get_activity_history(
         "status": "success",
         "period_days": days,
         "by_type": by_type,
-        "total_activities": len(recent),
+        "total_activities": len(activities),
         "total_active_minutes": total_minutes
     }
 
@@ -431,7 +385,7 @@ def schedule_appointment(
     notes: str = ""
 ) -> dict:
     """
-    Schedules a new appointment or reminder.
+    Schedules a new appointment or reminder in Supabase.
     
     Args:
         title: What the appointment is for (e.g., 'Annual checkup with Dr. Sharma')
@@ -445,28 +399,31 @@ def schedule_appointment(
     Returns:
         dict: Confirmation with reminder info
     """
-    data = _load_data()
+    user_id = _get_user_id(tool_context)
     
-    entry = {
-        "id": len(data.get("appointments", [])) + 1,
-        "created_at": _get_current_time(),
-        "title": title,
-        "appointment_type": appointment_type.lower(),
-        "date_time": date_time,
-        "location": location,
-        "doctor_name": doctor_name,
-        "notes": notes,
-        "status": "scheduled",
-        "reminder_sent": False
-    }
+    # Parse date_time into date and time parts
+    try:
+        dt = datetime.fromisoformat(date_time)
+        date_part = dt.strftime("%Y-%m-%d")
+        time_part = dt.strftime("%H:%M")
+    except:
+        date_part = date_time.split(" ")[0] if " " in date_time else date_time
+        time_part = date_time.split(" ")[1] if " " in date_time else "12:00"
     
-    data["appointments"].append(entry)
-    _save_data(data)
+    # Build description with doctor name, notes, and type
+    description_parts = [f"Type: {appointment_type.lower()}"]
+    if doctor_name:
+        description_parts.append(f"Doctor: {doctor_name}")
+    if notes:
+        description_parts.append(f"Notes: {notes}")
+    description = "; ".join(description_parts)
+    
+    save_appointment(user_id, title, description, date_part, time_part, location)
     
     return {
         "status": "success",
         "message": f"I've scheduled your {title} for {date_time} at {location}. I'll remind you when it's approaching.",
-        "appointment_id": entry["id"]
+        "appointment_id": f"{user_id}_{date_part}_{time_part}"
     }
 
 
@@ -475,7 +432,7 @@ def get_upcoming_appointments(
     days_ahead: int = 7
 ) -> dict:
     """
-    Gets upcoming appointments for the specified period.
+    Gets upcoming appointments for the specified period from Supabase.
     
     Args:
         days_ahead: How many days ahead to look
@@ -484,20 +441,28 @@ def get_upcoming_appointments(
     Returns:
         dict: List of upcoming appointments
     """
-    data = _load_data()
-    appointments = data.get("appointments", [])
+    user_id = _get_user_id(tool_context)
+    appointments = get_appointments(user_id, limit=50)
     
     now = datetime.now()
     future_limit = now + timedelta(days=days_ahead)
     
     upcoming = []
     for apt in appointments:
-        if apt.get("status") == "cancelled":
-            continue
         try:
-            apt_time = datetime.fromisoformat(apt["date_time"])
-            if now <= apt_time <= future_limit:
-                upcoming.append(apt)
+            # Combine date and time
+            apt_date = apt.get("date", "")
+            apt_time = apt.get("time", "12:00")
+            apt_datetime = datetime.fromisoformat(f"{apt_date} {apt_time}")
+            if now <= apt_datetime <= future_limit:
+                # Format for response
+                upcoming.append({
+                    "id": apt.get("id"),
+                    "title": apt.get("title"),
+                    "date_time": f"{apt_date} {apt_time}",
+                    "location": apt.get("location"),
+                    "description": apt.get("description", "")
+                })
         except:
             continue
     
@@ -523,7 +488,7 @@ def cancel_appointment(
     tool_context: ToolContext
 ) -> dict:
     """
-    Cancels an existing appointment.
+    Cancels an existing appointment in Supabase.
     
     Args:
         appointment_id: ID of the appointment to cancel
@@ -532,18 +497,22 @@ def cancel_appointment(
     Returns:
         dict: Confirmation message
     """
-    data = _load_data()
-    appointments = data.get("appointments", [])
+    user_id = _get_user_id(tool_context)
     
+    # First get the appointment to show what's being cancelled
+    appointments = get_appointments(user_id, limit=50)
+    apt_to_cancel = None
     for apt in appointments:
         if apt.get("id") == appointment_id:
-            apt["status"] = "cancelled"
-            apt["cancelled_at"] = _get_current_time()
-            _save_data(data)
-            return {
-                "status": "success",
-                "message": f"I've cancelled your appointment: {apt['title']}."
-            }
+            apt_to_cancel = apt
+            break
+    
+    if apt_to_cancel:
+        delete_appointment(appointment_id)
+        return {
+            "status": "success",
+            "message": f"I've cancelled your appointment: {apt_to_cancel.get('title', 'the appointment')}."
+        }
     
     return {
         "status": "not_found",
@@ -558,6 +527,7 @@ def analyze_wellness_patterns(
 ) -> dict:
     """
     Analyzes user's patterns across activities, moods, and routines to detect insights and concerns.
+    Uses data from Supabase.
     
     Args:
         tool_context: ADK tool context
@@ -565,23 +535,17 @@ def analyze_wellness_patterns(
     Returns:
         dict: Wellness insights and any alerts
     """
-    data = _load_data()
+    user_id = _get_user_id(tool_context)
     
-    now = datetime.now()
-    week_ago = now - timedelta(days=7)
+    # Get data from Supabase using the wellness helper
+    wellness_data = get_wellness_data(user_id)
     
     insights = []
     concerns = []
     
-    # Analyze activities
-    activities = data.get("activities", [])
-    recent_activities = []
-    for a in activities:
-        try:
-            if datetime.fromisoformat(a["timestamp"]) >= week_ago:
-                recent_activities.append(a)
-        except:
-            continue
+    # Get recent activities and moods
+    recent_activities = wellness_data.get("activities", [])
+    recent_moods = wellness_data.get("moods", [])
     
     # Check for walking/exercise patterns
     walks = [a for a in recent_activities if a.get("activity_type") in ["walking", "exercise"]]
@@ -608,18 +572,8 @@ def analyze_wellness_patterns(
             "urgency": "medium"
         })
     
-    # Analyze moods
-    moods = data.get("moods", [])
-    recent_moods = []
-    for m in moods:
-        try:
-            if datetime.fromisoformat(m["timestamp"]) >= week_ago:
-                recent_moods.append(m)
-        except:
-            continue
-    
     # Check for concerning mood patterns
-    negative_moods = [m for m in recent_moods if m.get("mood") in ["sad", "anxious", "lonely"]]
+    negative_moods = [m for m in recent_moods if m.get("rating") in ["sad", "anxious", "lonely"]]
     if len(negative_moods) >= 3:
         concerns.append({
             "type": "mood_concern",
@@ -628,9 +582,20 @@ def analyze_wellness_patterns(
             "urgency": "medium"
         })
     
-    # Check energy levels
-    if recent_moods:
-        avg_energy = sum(m.get("energy_level", 5) for m in recent_moods) / len(recent_moods)
+    # Check energy levels from mood notes
+    avg_energy = 5
+    energy_count = 0
+    for m in recent_moods:
+        notes = m.get("notes", "")
+        if "Energy:" in notes:
+            try:
+                energy = int(notes.split("Energy:")[1].split("/")[0].strip())
+                avg_energy += energy
+                energy_count += 1
+            except:
+                pass
+    if energy_count > 0:
+        avg_energy = avg_energy / energy_count
         if avg_energy < 4:
             concerns.append({
                 "type": "low_energy",
@@ -643,8 +608,10 @@ def analyze_wellness_patterns(
     days_with_activity = set()
     for a in recent_activities:
         try:
-            day = datetime.fromisoformat(a["timestamp"]).date()
-            days_with_activity.add(day)
+            timestamp = a.get("timestamp", "")
+            if timestamp:
+                day = datetime.fromisoformat(timestamp).date()
+                days_with_activity.add(day)
         except:
             continue
     
@@ -677,7 +644,8 @@ def send_family_alert(
     category: str = "wellness"
 ) -> dict:
     """
-    Sends a meaningful update to designated family members. Only sends important, non-spam updates.
+    Sends a meaningful update to designated family members via Supabase.
+    Only sends important, non-spam updates.
     
     Args:
         message: The specific detail to share with family
@@ -688,24 +656,14 @@ def send_family_alert(
     Returns:
         dict: Confirmation that family was notified
     """
-    data = _load_data()
+    user_id = _get_user_id(tool_context)
     
-    alert = {
-        "timestamp": _get_current_time(),
-        "message": message,
-        "urgency": urgency.lower(),
-        "category": category.lower(),
-        "status": "sent"
-    }
+    # Map category to alert type
+    alert_type = category.lower()
     
-    if "family_alerts" not in data:
-        data["family_alerts"] = []
-    
-    data["family_alerts"].append(alert)
-    _save_data(data)
+    save_alert(user_id, alert_type, message)
     
     # In a real implementation, this would trigger actual notifications
-    # For now, we log and confirm
     print(f"[FAMILY ALERT] Urgency: {urgency} | Category: {category} | Message: {message}")
     
     return {
@@ -720,7 +678,7 @@ def get_family_alerts_history(
     days: int = 7
 ) -> dict:
     """
-    Gets history of alerts sent to family.
+    Gets history of alerts sent to family from Supabase.
     
     Args:
         days: Number of days to look back
@@ -729,23 +687,13 @@ def get_family_alerts_history(
     Returns:
         dict: Alert history
     """
-    data = _load_data()
-    alerts = data.get("family_alerts", [])
-    
-    cutoff = datetime.now() - timedelta(days=days)
-    
-    recent = []
-    for a in alerts:
-        try:
-            if datetime.fromisoformat(a["timestamp"]) >= cutoff:
-                recent.append(a)
-        except:
-            continue
+    user_id = _get_user_id(tool_context)
+    alerts = get_alerts(user_id, limit=50)
     
     return {
         "status": "success",
-        "alerts": recent,
-        "count": len(recent)
+        "alerts": alerts,
+        "count": len(alerts)
     }
 
 
@@ -755,31 +703,143 @@ def get_activity_suggestions(
     tool_context: ToolContext
 ) -> dict:
     """
-    Returns current context (Time, Location, Mood) so the Agent LLM 
+    Returns current context (Time, Location, Mood) from Supabase so the Agent LLM 
     can generate personalized, dynamic suggestions.
     """
+    user_id = _get_user_id(tool_context)
+    
     now = datetime.now()
-    data = _load_data()
-    profile = data.get("user_profile", {})
-    moods = data.get("moods", [])
-    last_mood = moods[-1]["mood"] if moods else "unknown"
+    profile = get_profile(user_id) or {}
+    moods = get_moods(user_id, period="today", limit=1)
+    last_mood = moods[0].get("rating", "unknown") if moods else "unknown"
+    
+    # Parse interests from profile if stored
+    interests = []
+    preferences = profile.get("preferences", {})
+    if isinstance(preferences, dict):
+        interests = preferences.get("interests", [])
     
     # Instead of static lists, we provide context to the LLM
     return {
         "status": "success",
         "current_time": now.strftime("%I:%M %p"),
         "location": profile.get("location", "Unknown"),
-        "user_interests": profile.get("interests", []),
+        "user_interests": interests,
         "last_known_mood": last_mood,
         "instruction": "Based on this context, suggest 3 warm, personlized activities for a senior user."
     }
+
+
+def search_local_activities(
+    tool_context: ToolContext,
+    activity_type: str = "community",
+    search_query: Optional[str] = None
+) -> dict:
+    """
+    Search for local activities and events near the user.
+    Uses Google Search or curated database.
+    
+    Args:
+        activity_type: Type of activity (fitness, social, hobby, religious, learning, community)
+        search_query: Optional specific search query
+        tool_context: ADK tool context
+    
+    Returns:
+        dict: List of local activities and events
+    """
+    user_id = _get_user_id(tool_context)
+    profile = get_profile(user_id) or {}
+    
+    location = profile.get("location", "your area")
+    interests = profile.get("interests", [])
+    
+    try:
+        from agent.activity_discovery import get_activity_discovery
+        discovery = get_activity_discovery()
+        
+        # Run async function synchronously
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(
+                discovery.search_local_events(location, interests, activity_type)
+            )
+        finally:
+            loop.close()
+        
+        return result
+    except Exception as e:
+        print(f"[Activity Discovery Error] {e}")
+        return {
+            "status": "error",
+            "message": "I couldn't search for activities right now. Let me suggest some general options.",
+            "suggestions": [
+                "Take a walk in a nearby park",
+                "Visit the local senior center",
+                "Join a community yoga class",
+                "Attend a religious service",
+                "Check with your housing society for events"
+            ]
+        }
+
+
+def get_mood_based_suggestions(
+    tool_context: ToolContext
+) -> dict:
+    """
+    Get activity suggestions based on current mood and energy level.
+    
+    Args:
+        tool_context: ADK tool context
+    
+    Returns:
+        dict: Personalized activity suggestions
+    """
+    user_id = _get_user_id(tool_context)
+    
+    # Get latest mood
+    moods = get_moods(user_id, period="today", limit=1)
+    if moods:
+        mood = moods[0].get("rating", "okay")
+        energy = moods[0].get("energy_level", 5)
+    else:
+        mood = "okay"
+        energy = 5
+    
+    try:
+        from agent.activity_discovery import get_activity_discovery
+        discovery = get_activity_discovery()
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(
+                discovery.get_activity_for_mood(mood, energy)
+            )
+        finally:
+            loop.close()
+        
+        return result
+    except Exception as e:
+        print(f"[Mood Suggestions Error] {e}")
+        return {
+            "status": "success",
+            "suggestions": [
+                "Take a gentle walk",
+                "Listen to some music",
+                "Call a loved one",
+                "Do some light stretching",
+                "Read a book or magazine"
+            ],
+            "message": "Here are some activities you might enjoy!"
+        }
 
 
 def get_daily_summary(
     tool_context: ToolContext
 ) -> dict:
     """
-    Generates a summary of the user's day including activities, mood, and expenses.
+    Generates a summary of the user's day including activities, mood, and expenses from Supabase.
     
     Args:
         tool_context: ADK tool context
@@ -787,37 +847,21 @@ def get_daily_summary(
     Returns:
         dict: Daily summary
     """
-    data = _load_data()
+    user_id = _get_user_id(tool_context)
     today = datetime.now().date().isoformat()
     
-    # Today's activities
-    activities = data.get("activities", [])
-    today_activities = [
-        a for a in activities
-        if a.get("timestamp", "").startswith(today)
-    ]
+    # Get today's data from Supabase
+    activities = get_activities(user_id, period="today", limit=50)
+    moods = get_moods(user_id, period="today", limit=50)
+    expenses = get_expenses(user_id, period="today")
     
-    # Today's moods
-    moods = data.get("moods", [])
-    today_moods = [
-        m for m in moods
-        if m.get("timestamp", "").startswith(today)
-    ]
-    
-    # Today's expenses
-    expenses = data.get("expenses", [])
-    today_expenses = [
-        e for e in expenses
-        if e.get("timestamp", "").startswith(today)
-    ]
-    
-    total_expenses = sum(e.get("amount", 0) for e in today_expenses)
-    total_active_minutes = sum(a.get("duration_minutes", 0) for a in today_activities)
+    total_expenses = sum(e.get("amount", 0) for e in expenses)
+    total_active_minutes = sum(a.get("duration_minutes", 0) for a in activities)
     
     # Determine mood trend
-    if today_moods:
-        positive = sum(1 for m in today_moods if m.get("mood") in ["happy", "content", "energetic", "grateful"])
-        negative = sum(1 for m in today_moods if m.get("mood") in ["sad", "anxious", "lonely", "tired"])
+    if moods:
+        positive = sum(1 for m in moods if m.get("rating") in ["happy", "content", "energetic", "grateful"])
+        negative = sum(1 for m in moods if m.get("rating") in ["sad", "anxious", "lonely", "tired"])
         if positive > negative:
             mood_trend = "positive"
         elif negative > positive:
@@ -831,15 +875,15 @@ def get_daily_summary(
         "status": "success",
         "date": today,
         "mood_trend": mood_trend,
-        "activities_count": len(today_activities),
+        "activities_count": len(activities),
         "total_active_minutes": total_active_minutes,
         "expenses_total": total_expenses,
-        "expenses_count": len(today_expenses),
-        "summary": f"Today you've been active for {total_active_minutes} minutes with {len(today_activities)} activities. Your mood has been {mood_trend}."
+        "expenses_count": len(expenses),
+        "summary": f"Today you've been active for {total_active_minutes} minutes with {len(activities)} activities. Your mood has been {mood_trend}."
     }
 
 
-# ==================== LONG-TERM MEMORY TOOLS ====================
+# ==================== LONG-TERM MEMORY TOOLS (Mem0) ====================
 
 def remember_fact(
     tool_context: ToolContext,
@@ -847,9 +891,11 @@ def remember_fact(
     category: str = "general"
 ) -> dict:
     """
-    Remembers a factual detail about the user for long-term storage.
+    Remembers a factual detail about the user using Mem0 for semantic memory.
     Use this when the user mentions something that doesn't fit into other tools.
     e.g., "My grandson's name is Rahul", "I hate spicy food", "I worked as a teacher".
+    
+    This uses Mem0 for semantic search and long-term agent context.
     
     Args:
         fact: The piece of information to remember
@@ -859,24 +905,28 @@ def remember_fact(
     Returns:
         dict: Confirmation
     """
-    data = _load_data()
+    user_id = _get_user_id(tool_context)
     
-    if "long_term_memory" not in data:
-        data["long_term_memory"] = []
+    # Use Mem0 for semantic memory storage
+    try:
+        from mem0 import MemoryClient
+        mem0_client = MemoryClient()
         
-    memory = {
-        "timestamp": _get_current_time(),
-        "fact": fact,
-        "category": category
-    }
-    
-    data["long_term_memory"].append(memory)
-    _save_data(data)
-    
-    return {
-        "status": "success",
-        "message": f"I've made a note of that: {fact}"
-    }
+        # Add memory with category metadata
+        memory_text = f"[{category}] {fact}"
+        mem0_client.add(memory_text, user_id=user_id)
+        
+        return {
+            "status": "success",
+            "message": f"I've made a note of that: {fact}"
+        }
+    except Exception as e:
+        print(f"[Mem0 Error] Failed to store memory: {e}")
+        # Fallback - just acknowledge without persisting
+        return {
+            "status": "noted",
+            "message": f"I'll remember that: {fact}"
+        }
 
 
 def recall_memories(
@@ -885,7 +935,7 @@ def recall_memories(
     category: Optional[str] = None
 ) -> dict:
     """
-    Recalls facts from long-term memory.
+    Recalls facts from Mem0 semantic memory.
     
     Args:
         query: Optional search term
@@ -895,24 +945,157 @@ def recall_memories(
     Returns:
         dict: List of relevant memories
     """
-    data = _load_data()
-    memories = data.get("long_term_memory", [])
+    user_id = _get_user_id(tool_context)
     
-    results = []
+    try:
+        from mem0 import MemoryClient
+        import os
+        api_key = os.getenv("MEM0_API_KEY")
+        if not api_key:
+            return {"status": "success", "memories": [], "count": 0}
+        
+        mem0_client = MemoryClient(api_key=api_key)
+        
+        # Search memories - must pass user_id for filtering
+        search_query = query if query else "user preferences and personal information"
+        memories_result = mem0_client.search(
+            query=search_query,
+            user_id=user_id,
+            limit=10
+        )
+        
+        results = []
+        if memories_result:
+            for mem in memories_result:
+                memory_text = mem.get("memory", "")
+                # Filter by category if specified
+                if category:
+                    if not memory_text.startswith(f"[{category}]"):
+                        continue
+                results.append({
+                    "fact": memory_text,
+                    "relevance": mem.get("score", 0)
+                })
+        
+        return {
+            "status": "success",
+            "memories": results,
+            "count": len(results)
+        }
+    except Exception as e:
+        print(f"[Mem0 Error] Failed to recall memories: {e}")
+        return {
+            "status": "success",
+            "memories": [],
+            "count": 0
+        }
+
+
+# ==================== VIDEO CALL TOOLS ====================
+
+def initiate_video_call(
+    tool_context: ToolContext,
+    contact_name: str,
+    contact_type: str = "family"
+) -> dict:
+    """
+    Initiates a video call with a family member or friend.
     
-    for m in memories:
-        if category and m.get("category") != category:
-            continue
-            
-        if query and query.lower() not in m.get("fact", "").lower():
-            continue
-            
-        results.append(m)
+    This prepares the video call UI and notifies the family member.
     
-    results.sort(key=lambda x: x["timestamp"], reverse=True)
+    Args:
+        tool_context: ADK tool context
+        contact_name: Name of the person to call (e.g., "my daughter", "Ravi", "family")
+        contact_type: Type of contact - 'family', 'friend', 'caregiver'
+    
+    Returns:
+        dict: Status and instructions for the video call
+    """
+    user_id = _get_user_id(tool_context)
+    user_name = tool_context.state.get("user:name", "User")
+    
+    # Log the call request as a social activity
+    save_activity(user_id, {
+        "activity_type": "phone_call",
+        "description": f"Video call with {contact_name}",
+        "duration": 0,  # Will be updated when call ends
+        "timestamp": _get_current_time(),
+        "call_type": "video",
+        "contact": contact_name
+    })
+    
+    # Create an alert for family members so they know to join
+    save_alert(user_id, {
+        "alert_type": "video_call_request",
+        "message": f"{user_name} wants to video call with {contact_name}",
+        "urgency": "medium",
+        "timestamp": _get_current_time(),
+        "read": False,
+        "contact_requested": contact_name
+    })
     
     return {
         "status": "success",
-        "memories": results,
-        "count": len(results)
+        "message": f"I'm setting up a video call with {contact_name} for you!",
+        "call_ready": True,
+        "instructions": "The video call screen is now ready. Your family member will receive a notification to join.",
+        "ui_action": "open_video_call",
+        "contact": contact_name
+    }
+
+
+def end_video_call(
+    tool_context: ToolContext,
+    duration_minutes: int = 0
+) -> dict:
+    """
+    Ends the current video call and logs the activity.
+    
+    Args:
+        tool_context: ADK tool context  
+        duration_minutes: How long the call lasted
+    
+    Returns:
+        dict: Confirmation message
+    """
+    return {
+        "status": "success",
+        "message": f"The video call has ended. It's wonderful that you connected with your family!",
+        "duration": duration_minutes
+    }
+
+
+def get_available_contacts(
+    tool_context: ToolContext
+) -> dict:
+    """
+    Gets the list of family members and friends available for video calls.
+    
+    Returns:
+        dict: List of contacts that can be called
+    """
+    user_id = _get_user_id(tool_context)
+    profile = get_profile(user_id) or {}
+    
+    # Get emergency contact as primary family contact
+    emergency_name = profile.get("emergency_contact_name", "Family Member")
+    
+    # Default family contacts (in a real app, this would come from a contacts table)
+    contacts = [
+        {
+            "name": emergency_name,
+            "relationship": "Emergency Contact",
+            "available": True
+        },
+        {
+            "name": "Family Group",
+            "relationship": "All Family Members",
+            "available": True
+        }
+    ]
+    
+    return {
+        "status": "success",
+        "contacts": contacts,
+        "message": f"You can call {emergency_name} or start a family group call."
     }

@@ -8,13 +8,16 @@
 const API_BASE = 'http://localhost:8000'
 
 /**
- * Send a message to the Amble agent
+ * Send a message to the Amble agent (with retry for rate limits)
  * @param {string} message - User's message text
  * @param {string} userId - Unique user identifier
  * @param {string|null} sessionId - Optional session ID for conversation continuity
  * @returns {Promise<{response: string, session_id: string, user_id: string, memories_used: number}>}
  */
-export async function sendMessage(message, userId = 'default_user', sessionId = null) {
+export async function sendMessage(message, userId = 'default_user', sessionId = null, retryCount = 0) {
+    const MAX_RETRIES = 2
+    const RETRY_DELAY = 3000 // 3 seconds
+    
     try {
         const response = await fetch(`${API_BASE}/chat`, {
             method: 'POST',
@@ -30,10 +33,31 @@ export async function sendMessage(message, userId = 'default_user', sessionId = 
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}))
-            throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+            const errorMessage = errorData.detail || `HTTP ${response.status}: ${response.statusText}`
+            
+            // If session not found error, clear local session and retry
+            if (errorMessage.includes('Session not found') && retryCount < MAX_RETRIES) {
+                console.log('Session invalid, clearing and retrying...')
+                clearSession()
+                return sendMessage(message, userId, null, retryCount + 1)
+            }
+            
+            // Retry on rate limit (429) or server error (500) if we have retries left
+            if ((response.status === 429 || response.status === 500) && retryCount < MAX_RETRIES) {
+                console.log(`Rate limited or server error, retrying in ${RETRY_DELAY/1000}s... (attempt ${retryCount + 1}/${MAX_RETRIES})`)
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+                return sendMessage(message, userId, sessionId, retryCount + 1)
+            }
+            
+            throw new Error(errorMessage)
         }
 
-        return await response.json()
+        const result = await response.json()
+        // Save the session ID returned by server
+        if (result.session_id) {
+            saveSession(result.session_id)
+        }
+        return result
     } catch (error) {
         console.error('API Error (sendMessage):', error)
         throw error

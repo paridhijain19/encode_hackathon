@@ -8,14 +8,15 @@
 import { useState, useCallback, useEffect } from 'react'
 import { sendMessage, getSession, saveSession, getUserId } from '../services/api'
 
-export function useAgent() {
+export function useAgent(overrideUserId = null) {
     const [messages, setMessages] = useState([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
     const [sessionId, setSessionId] = useState(() => getSession())
     const [memoriesUsed, setMemoriesUsed] = useState(0)
 
-    const userId = getUserId()
+    // Use override if provided, otherwise fall back to localStorage
+    const userId = overrideUserId || getUserId()
 
     /**
      * Send a message to the agent and get response
@@ -62,10 +63,18 @@ export function useAgent() {
             console.error('Agent chat error:', err)
             setError(err.message || 'Failed to get response from Amble')
 
+            // Show more helpful error message based on the error type
+            let errorText = "I'm sorry, I couldn't process that right now. Please try again."
+            if (err.message && err.message.includes('429')) {
+                errorText = "I'm getting too many requests right now. Please wait a minute and try again. 🙏"
+            } else if (err.message && err.message.includes('500')) {
+                errorText = "Something went wrong on my end. Please wait a moment and try again."
+            }
+
             // Add error message to conversation
             const errorMsg = {
                 role: 'agent',
-                text: "I'm sorry, I couldn't process that right now. Please try again.",
+                text: errorText,
                 timestamp: new Date().toISOString(),
                 isError: true,
             }

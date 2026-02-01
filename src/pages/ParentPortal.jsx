@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Link, Routes, Route, useLocation } from 'react-router-dom'
 import {
     Home, Wallet, Heart, Activity, Users, Mic, Phone, Camera,
     Calendar, Clock, ChevronLeft, Volume2, Plus, Check, X, Sun, Moon,
-    Send, AlertCircle, Bell, MessageCircle, Share2
+    Send, AlertCircle, Bell, MessageCircle, Share2, PhoneOff, Video
 } from 'lucide-react'
 import './ParentPortal.css'
 import VoiceButton from '../components/VoiceButton'
@@ -13,15 +13,25 @@ import { LoadingCard } from '../components/LoadingSpinner'
 import { Modal, InputModal } from '../components/Modal'
 import { useAgent } from '../hooks/useAgent'
 import { useAgentPolling } from '../hooks/useAgentPolling'
+import { useAuth } from '../context/AuthContext'
+import { SignInModal, UserBadge } from '../components/SignIn'
+import { startVoiceCall, startVideoCall, endCall, isCometChatAvailable, initCometChat } from '../services/cometchat'
 
 function ParentPortal() {
     const location = useLocation()
     const [isChatOpen, setIsChatOpen] = useState(false)
     const [toast, setToast] = useState(null)
+    const [showSignIn, setShowSignIn] = useState(false)
     
-    // Agent integration
-    const agent = useAgent()
-    const agentState = useAgentPolling(5000) // Poll every 5 seconds
+    // Auth context
+    const { currentUser, isSignedIn, isLoading: authLoading } = useAuth()
+    
+    // Agent integration - use the signed-in user's ID
+    const agent = useAgent(currentUser?.id)
+    const agentState = useAgentPolling(5000, currentUser?.id) // Poll every 5 seconds
+
+    // Show sign-in modal if not signed in
+    const needsSignIn = !authLoading && !isSignedIn
 
     // Toast helper
     const showToast = useCallback((message, type = 'success') => {
@@ -71,6 +81,14 @@ function ParentPortal() {
 
     return (
         <div className="parent-portal">
+            {/* Sign-In Modal - shows when not signed in */}
+            {needsSignIn && (
+                <SignInModal 
+                    mode="parent" 
+                    onClose={() => {}} // Can't close without signing in
+                />
+            )}
+
             {/* Toast Notification */}
             {toast && (
                 <div className={`toast toast-${toast.type}`} style={{
@@ -98,13 +116,16 @@ function ParentPortal() {
                 </Link>
                 <div className="header-content">
                     <div className="greeting-section">
-                        <h1>{getGreeting()}, {userName}!</h1>
+                        <h1>{getGreeting()}, {currentUser?.name || userName}!</h1>
                     </div>
                     <p className="date-text">{currentDate}</p>
                 </div>
-                <button className="speak-btn" onClick={() => setIsChatOpen(true)} title="Talk to Amble">
-                    <Volume2 size={24} />
-                </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <UserBadge />
+                    <button className="speak-btn" onClick={() => setIsChatOpen(true)} title="Talk to Amble">
+                        <Volume2 size={24} />
+                    </button>
+                </div>
             </header>
 
             {/* Error display if polling fails */}
@@ -939,222 +960,541 @@ function ActivitiesView({ activities, onAction, showToast }) {
     )
 }
 
-/* Family View */
+/* Family View - Chat with Family Members */
 function FamilyView({ agentState, onAction, showToast }) {
-    const [isRecording, setIsRecording] = useState(false)
-    const [showMessageModal, setShowMessageModal] = useState(false)
-    const [selectedMember, setSelectedMember] = useState(null)
+    const [familyContacts, setFamilyContacts] = useState([])
+    const [selectedContact, setSelectedContact] = useState(null)
+    const [messages, setMessages] = useState([])
     const [messageText, setMessageText] = useState('')
+    const [isLoading, setIsLoading] = useState(true)
+    const [isSending, setIsSending] = useState(false)
+    const [isInCall, setIsInCall] = useState(false)
+    const [callType, setCallType] = useState(null) // 'voice' or 'video'
+    
+    const { currentUser } = useAuth()
+    const elderUserId = currentUser?.id || 'parent_user'
 
-    // Family members from profile or default
-    const familyMembers = agentState?.userProfile?.family_members || [
-        { name: 'David', relation: 'Son', avatar: '👨', phone: '+1-555-0101' },
-        { name: 'Sarah', relation: 'Daughter', avatar: '👩', phone: '+1-555-0102' },
-        { name: 'Grandkids', relation: 'Family', avatar: '👶', phone: null },
-    ]
+    // Load family contacts
+    useEffect(() => {
+        const loadContacts = async () => {
+            try {
+                const response = await fetch(`http://localhost:8000/api/family/${elderUserId}/contacts`)
+                if (response.ok) {
+                    const data = await response.json()
+                    setFamilyContacts(data.contacts || [])
+                    // Auto-select first contact if available
+                    if (data.contacts?.length > 0 && !selectedContact) {
+                        setSelectedContact(data.contacts[0])
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load contacts:', error)
+                // Use default contacts
+                setFamilyContacts([
+                    { id: 'family_sarah', name: 'Sarah', avatar: '👩', relation: 'Daughter' },
+                    { id: 'family_david', name: 'David', avatar: '👨', relation: 'Son' },
+                ])
+            }
+            setIsLoading(false)
+        }
+        loadContacts()
+    }, [elderUserId])
 
-    const handleCall = async (member) => {
-        showToast(`Calling ${member.name}...`, 'info')
-        await onAction(`Can you help me call ${member.name}?`)
+    // Load messages when contact is selected
+    useEffect(() => {
+        if (!selectedContact) return
+        
+        const loadMessages = async () => {
+            try {
+                const response = await fetch(
+                    `http://localhost:8000/api/family/${elderUserId}/messages?family_member_id=${selectedContact.id}`
+                )
+                if (response.ok) {
+                    const data = await response.json()
+                    setMessages(data.messages || [])
+                    
+                    // Mark messages as read
+                    fetch(`http://localhost:8000/api/family/${elderUserId}/messages/${selectedContact.id}/read?reader_id=${elderUserId}`, {
+                        method: 'POST'
+                    }).catch(() => {})
+                }
+            } catch (error) {
+                console.error('Failed to load messages:', error)
+            }
+        }
+        loadMessages()
+        
+        // Poll for new messages every 5 seconds
+        const interval = setInterval(loadMessages, 5000)
+        return () => clearInterval(interval)
+    }, [selectedContact, elderUserId])
+
+    const handleSendMessage = async () => {
+        if (!messageText.trim() || !selectedContact) return
+        
+        setIsSending(true)
+        const newMessage = {
+            id: Date.now(),
+            sender_id: elderUserId,
+            message: messageText,
+            message_type: 'text',
+            created_at: new Date().toISOString(),
+            read: false
+        }
+        
+        // Optimistically add message
+        setMessages(prev => [...prev, newMessage])
+        setMessageText('')
+        
+        try {
+            await fetch(`http://localhost:8000/api/family/${elderUserId}/messages/${selectedContact.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sender_id: elderUserId,
+                    message: messageText,
+                    message_type: 'text'
+                })
+            })
+            showToast(`Message sent to ${selectedContact.name}! 💌`, 'success')
+        } catch (error) {
+            console.error('Failed to send message:', error)
+            showToast('Message sent (offline mode)', 'info')
+        }
+        setIsSending(false)
     }
 
     const handleVideoCall = async () => {
-        showToast('Starting video call...', 'info')
-        await onAction('Can you help me start a video call with my family?')
-    }
-
-    const handleSendMessage = async () => {
-        if (!messageText.trim()) {
-            showToast('Please enter a message', 'error')
-            return
-        }
-        await onAction(`Send a message to ${selectedMember?.name || 'family'}: ${messageText}`)
-        showToast(`Message sent to ${selectedMember?.name || 'family'}! 💌`, 'success')
-        setShowMessageModal(false)
-        setMessageText('')
-        setSelectedMember(null)
-    }
-
-    const handleVoiceNote = async () => {
-        if (isRecording) {
-            // Stop recording
-            setIsRecording(false)
-            showToast('Voice note sent to family! 🎤', 'success')
-            await onAction('I just recorded a voice note for my family')
+        if (!selectedContact) return
+        
+        showToast(`Starting video call with ${selectedContact.name}...`, 'info')
+        setCallType('video')
+        setIsInCall(true)
+        
+        // Try CometChat first
+        const result = await startVideoCall(selectedContact.id)
+        if (result.success) {
+            showToast(`Connected to ${selectedContact.name}! 📹`, 'success')
+        } else if (result.fallback) {
+            // CometChat not available - show simulated call UI
+            showToast(`Video call with ${selectedContact.name} (Demo Mode)`, 'info')
         } else {
-            // Start recording
-            setIsRecording(true)
-            showToast('Recording... Tap again to stop', 'info')
+            showToast('Could not connect call. Please try again.', 'error')
+            setIsInCall(false)
         }
     }
 
-    const handleSharePhoto = async () => {
-        showToast('Opening camera...', 'info')
-        await onAction('I want to share a photo with my family')
+    const handleVoiceCall = async () => {
+        if (!selectedContact) return
+        
+        showToast(`Calling ${selectedContact.name}...`, 'info')
+        setCallType('voice')
+        setIsInCall(true)
+        
+        // Try CometChat first
+        const result = await startVoiceCall(selectedContact.id)
+        if (result.success) {
+            showToast(`Connected to ${selectedContact.name}! 📞`, 'success')
+        } else if (result.fallback) {
+            // CometChat not available - show simulated call UI
+            showToast(`Voice call with ${selectedContact.name} (Demo Mode)`, 'info')
+        } else {
+            showToast('Could not connect call. Please try again.', 'error')
+            setIsInCall(false)
+        }
     }
 
-    const openMessageModal = (member = null) => {
-        setSelectedMember(member)
-        setShowMessageModal(true)
+    const handleEndCall = async () => {
+        setIsInCall(false)
+        setCallType(null)
+        showToast('Call ended', 'info')
+        // Try to end CometChat call if active
+        try {
+            await endCall()
+        } catch (e) {
+            // Ignore errors
+        }
+    }
+
+    const formatMessageTime = (timestamp) => {
+        if (!timestamp) return ''
+        const date = new Date(timestamp)
+        const now = new Date()
+        const isToday = date.toDateString() === now.toDateString()
+        
+        if (isToday) {
+            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+        }
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    }
+
+    if (isLoading) {
+        return (
+            <div className="family-view" style={{ padding: '2rem', textAlign: 'center' }}>
+                <p>Loading family contacts...</p>
+            </div>
+        )
+    }
+
+    // Call overlay UI
+    if (isInCall) {
+        return (
+            <div className="family-view" style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                height: 'calc(100vh - 200px)',
+                background: callType === 'video' ? '#1a1a2e' : 'linear-gradient(135deg, #5B8A8A 0%, #3d5c5c 100%)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '24px',
+                padding: '24px'
+            }}>
+                {/* Video placeholder or avatar */}
+                <div style={{
+                    width: '150px',
+                    height: '150px',
+                    borderRadius: '50%',
+                    background: callType === 'video' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '4rem',
+                    animation: 'pulse 2s infinite'
+                }}>
+                    {selectedContact?.avatar || '👤'}
+                </div>
+                
+                <div style={{ textAlign: 'center' }}>
+                    <h2 style={{ color: 'white', margin: '0 0 8px', fontSize: '1.5rem' }}>
+                        {selectedContact?.name}
+                    </h2>
+                    <p style={{ color: 'rgba(255,255,255,0.8)', margin: 0 }}>
+                        {callType === 'video' ? '📹 Video Call' : '📞 Voice Call'} in progress...
+                    </p>
+                </div>
+
+                {/* Call controls */}
+                <div style={{ display: 'flex', gap: '20px', marginTop: '32px' }}>
+                    <button
+                        onClick={handleEndCall}
+                        style={{
+                            width: '70px',
+                            height: '70px',
+                            borderRadius: '50%',
+                            background: '#e74c3c',
+                            border: 'none',
+                            color: 'white',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 15px rgba(231, 76, 60, 0.4)'
+                        }}
+                    >
+                        <PhoneOff size={28} />
+                    </button>
+                </div>
+                
+                <p style={{ 
+                    color: 'rgba(255,255,255,0.6)', 
+                    fontSize: '0.85rem',
+                    marginTop: '24px'
+                }}>
+                    Tap the red button to end the call
+                </p>
+            </div>
+        )
     }
 
     return (
-        <div className="family-view">
-            {/* Quick Call */}
-            <section className="section-card">
-                <h2>📞 Quick Call</h2>
-                <div className="family-grid">
-                    {familyMembers.map((member, idx) => (
-                        <button 
-                            key={idx} 
-                            className="family-member-card"
-                            onClick={() => handleCall(member)}
-                            style={{ cursor: 'pointer', border: 'none', background: 'white', borderRadius: '16px', padding: '16px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
-                        >
-                            <span className="member-avatar" style={{ fontSize: '2.5rem', display: 'block', marginBottom: '8px' }}>{member.avatar}</span>
-                            <span className="member-name" style={{ display: 'block', fontWeight: '600', color: '#524C44' }}>{member.name}</span>
-                            <span className="member-relation" style={{ display: 'block', fontSize: '0.85rem', color: '#7A7267', marginBottom: '8px' }}>{member.relation}</span>
-                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                                <Phone size={20} style={{ color: '#5B8A8A' }} />
-                                <MessageCircle 
-                                    size={20} 
-                                    style={{ color: '#9CAF88', cursor: 'pointer' }} 
-                                    onClick={(e) => { e.stopPropagation(); openMessageModal(member) }}
-                                />
-                            </div>
-                        </button>
-                    ))}
-                </div>
-            </section>
+        <div className="family-view" style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            height: 'calc(100vh - 200px)', 
+            maxHeight: 'calc(100vh - 200px)',
+            gap: '0' 
+        }}>
+            {/* Contact Selector - scrollable horizontally on mobile */}
+            <div style={{ 
+                display: 'flex', 
+                gap: '8px', 
+                padding: '10px 12px',
+                overflowX: 'auto',
+                borderBottom: '1px solid #E8E4DD',
+                background: '#FAF9F7',
+                flexShrink: 0,
+                WebkitOverflowScrolling: 'touch'
+            }}>
+                {familyContacts.map((contact) => (
+                    <button
+                        key={contact.id}
+                        onClick={() => setSelectedContact(contact)}
+                        style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            padding: '10px 14px',
+                            borderRadius: '14px',
+                            border: selectedContact?.id === contact.id ? '2px solid #5B8A8A' : '2px solid transparent',
+                            background: selectedContact?.id === contact.id ? '#E8F4F4' : 'white',
+                            cursor: 'pointer',
+                            minWidth: '70px',
+                            flexShrink: 0,
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        <span style={{ fontSize: '1.75rem', marginBottom: '2px' }}>{contact.avatar}</span>
+                        <span style={{ fontWeight: '600', color: '#524C44', fontSize: '0.8rem' }}>{contact.name}</span>
+                        <span style={{ fontSize: '0.65rem', color: '#7A7267' }}>{contact.relation}</span>
+                    </button>
+                ))}
+            </div>
 
-            {/* Video Call */}
-            <button 
-                className="video-call-btn" 
-                onClick={handleVideoCall}
-                style={{ 
-                    width: '100%', 
-                    background: 'linear-gradient(135deg, #5B8A8A 0%, #4A7575 100%)', 
-                    color: 'white', 
-                    border: 'none', 
-                    borderRadius: '16px', 
-                    padding: '18px', 
-                    fontSize: '1.1rem', 
-                    fontWeight: '600', 
-                    cursor: 'pointer', 
+            {selectedContact ? (
+                <>
+                    {/* Chat Header with Call Buttons - Mobile optimized */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        background: 'white',
+                        borderBottom: '1px solid #E8E4DD',
+                        flexShrink: 0
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ fontSize: '2rem' }}>{selectedContact.avatar}</span>
+                            <div>
+                                <h3 style={{ margin: 0, color: '#524C44', fontSize: '1rem' }}>{selectedContact.name}</h3>
+                                <span style={{ fontSize: '0.75rem', color: '#7A7267' }}>{selectedContact.relation}</span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button 
+                                onClick={handleVoiceCall}
+                                style={{
+                                    width: '42px',
+                                    height: '42px',
+                                    borderRadius: '50%',
+                                    background: '#5B8A8A',
+                                    border: 'none',
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <Phone size={18} />
+                            </button>
+                            <button 
+                                onClick={handleVideoCall}
+                                style={{
+                                    width: '42px',
+                                    height: '42px',
+                                    borderRadius: '50%',
+                                    background: '#5B7355',
+                                    border: 'none',
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <Video size={18} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Messages Container - Scrollable, mobile optimized */}
+                    <div style={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        padding: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        background: '#F5F3EF',
+                        WebkitOverflowScrolling: 'touch'
+                    }}>
+                        {messages.length === 0 ? (
+                            <div style={{ 
+                                textAlign: 'center', 
+                                padding: '30px 16px',
+                                color: '#7A7267'
+                            }}>
+                                <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '10px' }}>💬</span>
+                                <p style={{ margin: 0, fontSize: '0.95rem' }}>No messages yet with {selectedContact.name}</p>
+                                <p style={{ margin: '6px 0 0', fontSize: '0.8rem' }}>Send a message to start the conversation!</p>
+                            </div>
+                        ) : (
+                            <>
+                                {messages.map((msg, idx) => {
+                                    const isFromMe = msg.sender_id === elderUserId
+                                    const showDate = idx === 0 || 
+                                        new Date(msg.created_at).toDateString() !== new Date(messages[idx-1].created_at).toDateString()
+                                    
+                                    return (
+                                        <div key={msg.id || idx}>
+                                            {showDate && (
+                                                <div style={{
+                                                    textAlign: 'center',
+                                                    padding: '6px',
+                                                    margin: '6px 0'
+                                                }}>
+                                                    <span style={{
+                                                        background: '#E8E4DD',
+                                                        padding: '3px 10px',
+                                                        borderRadius: '10px',
+                                                        fontSize: '0.7rem',
+                                                        color: '#7A7267'
+                                                    }}>
+                                                        {new Date(msg.created_at).toLocaleDateString('en-US', { 
+                                                            weekday: 'short', 
+                                                            month: 'short', 
+                                                            day: 'numeric' 
+                                                        })}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            <div style={{
+                                                display: 'flex',
+                                                justifyContent: isFromMe ? 'flex-end' : 'flex-start',
+                                                marginBottom: '3px'
+                                            }}>
+                                                <div style={{
+                                                    maxWidth: '85%',
+                                                    padding: '10px 14px',
+                                                    borderRadius: isFromMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                                                    background: isFromMe ? '#5B8A8A' : 'white',
+                                                    color: isFromMe ? 'white' : '#524C44',
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+                                                    fontSize: '0.95rem'
+                                                }}>
+                                                    <p style={{ margin: 0, lineHeight: 1.35 }}>{msg.message}</p>
+                                                    <span style={{
+                                                        display: 'block',
+                                                        fontSize: '0.65rem',
+                                                        marginTop: '3px',
+                                                        opacity: 0.7,
+                                                        textAlign: 'right'
+                                                    }}>
+                                                        {formatMessageTime(msg.created_at)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </>
+                        )}
+                    </div>
+
+                    {/* Message Input - Mobile optimized */}
+                    <div style={{
+                        display: 'flex',
+                        gap: '8px',
+                        padding: '10px 12px',
+                        background: 'white',
+                        borderTop: '1px solid #E8E4DD',
+                        flexShrink: 0
+                    }}>
+                        <input
+                            type="text"
+                            value={messageText}
+                            onChange={(e) => setMessageText(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                            placeholder={`Message ${selectedContact.name}...`}
+                            style={{
+                                flex: 1,
+                                padding: '12px 16px',
+                                border: '2px solid #E8E4DD',
+                                borderRadius: '24px',
+                                fontSize: '0.95rem',
+                                outline: 'none',
+                                transition: 'border-color 0.2s',
+                                minWidth: 0
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = '#5B8A8A'}
+                            onBlur={(e) => e.target.style.borderColor = '#E8E4DD'}
+                        />
+                        <button
+                            onClick={handleSendMessage}
+                            disabled={!messageText.trim() || isSending}
+                            style={{
+                                width: '46px',
+                                height: '46px',
+                                borderRadius: '50%',
+                                background: messageText.trim() ? '#5B7355' : '#E8E4DD',
+                                border: 'none',
+                                color: messageText.trim() ? 'white' : '#7A7267',
+                                cursor: messageText.trim() ? 'pointer' : 'not-allowed',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.2s',
+                                flexShrink: 0
+                            }}
+                        >
+                            <Send size={20} />
+                        </button>
+                    </div>
+
+                    {/* Quick Actions - Mobile scrollable */}
+                    <div style={{
+                        display: 'flex',
+                        gap: '6px',
+                        padding: '8px 12px',
+                        background: 'white',
+                        flexShrink: 0,
+                        overflowX: 'auto',
+                        WebkitOverflowScrolling: 'touch'
+                    }}>
+                        {['❤️ Love you!', '📞 Call me', '☀️ Good morning', '💭 Miss you'].map((quick) => (
+                            <button
+                                key={quick}
+                                onClick={() => setMessageText(quick)}
+                                style={{
+                                    padding: '6px 12px',
+                                    background: '#FAF9F7',
+                                    border: '1px solid #E8E4DD',
+                                    borderRadius: '18px',
+                                    fontSize: '0.8rem',
+                                    color: '#524C44',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0
+                                }}
+                            >
+                                {quick}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            ) : (
+                <div style={{ 
+                    flex: 1, 
                     display: 'flex', 
                     alignItems: 'center', 
-                    justifyContent: 'center', 
+                    justifyContent: 'center',
+                    flexDirection: 'column',
                     gap: '12px',
-                    marginBottom: '20px',
-                    boxShadow: '0 4px 12px rgba(91, 138, 138, 0.3)'
-                }}
-            >
-                <Camera size={24} />
-                <span>Start Video Call</span>
-            </button>
-
-            {/* Quick Message */}
-            <section className="section-card">
-                <h2>💬 Quick Message</h2>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                    <button 
-                        onClick={() => openMessageModal()}
-                        style={{
-                            flex: 1,
-                            padding: '14px',
-                            background: '#FAF9F7',
-                            border: '2px solid #E8E4DD',
-                            borderRadius: '12px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            color: '#524C44',
-                            fontWeight: '500'
-                        }}
-                    >
-                        <Send size={20} />
-                        Text Family
-                    </button>
-                    <button 
-                        onClick={() => showToast('Sharing your location with family...', 'info')}
-                        style={{
-                            flex: 1,
-                            padding: '14px',
-                            background: '#FAF9F7',
-                            border: '2px solid #E8E4DD',
-                            borderRadius: '12px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            color: '#524C44',
-                            fontWeight: '500'
-                        }}
-                    >
-                        <Share2 size={20} />
-                        Share Location
-                    </button>
+                    color: '#7A7267',
+                    padding: '20px'
+                }}>
+                    <Users size={40} />
+                    <p style={{ margin: 0, fontSize: '0.95rem', textAlign: 'center' }}>Select a family member to start chatting</p>
                 </div>
-            </section>
+            )}
 
-            {/* Photo Share */}
-            <section className="section-card">
-                <h2>📸 Share a Moment</h2>
-                <div className="photo-actions" style={{ display: 'flex', gap: '16px' }}>
-                    <button 
-                        onClick={handleSharePhoto}
-                        className="btn btn-outline" 
-                        style={{ flex: 1, padding: '20px', flexDirection: 'column', gap: '8px', cursor: 'pointer' }}
-                    >
-                        <Camera size={32} />
-                        <span>Take Photo</span>
-                    </button>
-                    <button 
-                        onClick={() => showToast('Opening gallery...', 'info')}
-                        className="btn btn-outline" 
-                        style={{ flex: 1, padding: '20px', flexDirection: 'column', gap: '8px', cursor: 'pointer' }}
-                    >
-                        <span style={{ fontSize: '2rem' }}>🖼️</span>
-                        <span>Gallery</span>
-                    </button>
-                </div>
-            </section>
-
-            {/* Voice Message */}
-            <section className="section-card">
-                <h2>🎤 Voice Note</h2>
-                <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                    <button 
-                        onClick={handleVoiceNote}
-                        className="voice-message-btn" 
-                        style={{ 
-                            width: '80px', 
-                            height: '80px', 
-                            borderRadius: '50%', 
-                            background: isRecording ? '#E74C3C' : '#C17F59', 
-                            border: 'none', 
-                            color: 'white', 
-                            cursor: 'pointer', 
-                            boxShadow: isRecording ? '0 0 0 8px rgba(231, 76, 60, 0.2)' : '0 4px 12px rgba(193, 127, 89, 0.4)',
-                            transition: 'all 0.3s',
-                            animation: isRecording ? 'pulse 1.5s infinite' : 'none'
-                        }}
-                    >
-                        <Mic size={32} />
-                    </button>
-                    <p className="voice-hint" style={{ marginTop: '16px', color: '#7A7267' }}>
-                        {isRecording ? '🔴 Recording... Tap to stop' : 'Tap to record a message for the family group'}
-                    </p>
-                </div>
-            </section>
-
-            {/* Emergency Alert */}
-            <section className="section-card" style={{ background: '#FFF5F5', border: '1px solid #FFD4D4' }}>
-                <h2 style={{ color: '#C17F59' }}>🚨 Family Alert</h2>
-                <p style={{ color: '#7A7267', marginBottom: '12px' }}>Send an alert to all family members:</p>
+            {/* Emergency Alert - Fixed at bottom, mobile optimized */}
+            <div style={{
+                padding: '10px 12px',
+                background: '#FFF5F5',
+                borderTop: '1px solid #FFD4D4',
+                flexShrink: 0
+            }}>
                 <button
                     onClick={async () => {
                         showToast('Alert sent to all family members!', 'info')
@@ -1162,96 +1502,23 @@ function FamilyView({ agentState, onAction, showToast }) {
                     }}
                     style={{
                         width: '100%',
-                        padding: '14px',
+                        padding: '10px',
                         background: '#C17F59',
                         color: 'white',
                         border: 'none',
-                        borderRadius: '12px',
-                        fontSize: '1rem',
+                        borderRadius: '10px',
+                        fontSize: '0.9rem',
                         fontWeight: '600',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '8px'
+                        gap: '6px'
                     }}
                 >
-                    <Bell size={20} /> Send Alert
+                    <Bell size={18} /> Emergency Alert to All Family
                 </button>
-            </section>
-
-            {/* Message Modal */}
-            <Modal 
-                isOpen={showMessageModal}
-                title={`Message ${selectedMember?.name || 'Family'}`} 
-                onClose={() => { setShowMessageModal(false); setMessageText(''); setSelectedMember(null) }}
-            >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {selectedMember && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#FAF9F7', borderRadius: '12px' }}>
-                            <span style={{ fontSize: '2rem' }}>{selectedMember.avatar}</span>
-                            <div>
-                                <div style={{ fontWeight: '600', color: '#524C44' }}>{selectedMember.name}</div>
-                                <div style={{ fontSize: '0.9rem', color: '#7A7267' }}>{selectedMember.relation}</div>
-                            </div>
-                        </div>
-                    )}
-                    <textarea
-                        placeholder="Type your message..."
-                        value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
-                        rows={4}
-                        style={{
-                            width: '100%',
-                            padding: '14px',
-                            border: '2px solid #E8E4DD',
-                            borderRadius: '12px',
-                            fontSize: '1rem',
-                            resize: 'none',
-                            fontFamily: 'inherit'
-                        }}
-                        autoFocus
-                    />
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                        <button
-                            onClick={() => { setShowMessageModal(false); setMessageText('') }}
-                            style={{
-                                flex: 1,
-                                padding: '14px',
-                                background: '#E8E4DD',
-                                color: '#524C44',
-                                border: 'none',
-                                borderRadius: '12px',
-                                fontSize: '1rem',
-                                fontWeight: '500',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSendMessage}
-                            style={{
-                                flex: 1,
-                                padding: '14px',
-                                background: '#5B7355',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '12px',
-                                fontSize: '1rem',
-                                fontWeight: '600',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px'
-                            }}
-                        >
-                            <Send size={18} /> Send
-                        </button>
-                    </div>
-                </div>
-            </Modal>
+            </div>
         </div>
     )
 }

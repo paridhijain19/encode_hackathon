@@ -23,13 +23,14 @@ const DEFAULT_STATE = {
     lastUpdated: null,
 }
 
-export function useAgentPolling(interval = 5000) {
+export function useAgentPolling(interval = 5000, overrideUserId = null) {
     const [state, setState] = useState(DEFAULT_STATE)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
     
     const intervalRef = useRef(null)
-    const userId = getUserId()
+    // Use override if provided, otherwise fall back to localStorage
+    const userId = overrideUserId || getUserId()
 
     /**
      * Fetch state from backend

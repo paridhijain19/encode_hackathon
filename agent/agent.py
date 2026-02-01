@@ -39,6 +39,10 @@ from agent.tools import (
     # Memory
     remember_fact,
     recall_memories,
+    # Video calls
+    initiate_video_call,
+    end_video_call,
+    get_available_contacts,
 )
 
 from agent.prompts import (
@@ -76,17 +80,17 @@ def _load_persona_profile():
 
 def initialize_user_context(callback_context: CallbackContext):
     """
-    Initializes user context from stored data or default persona profile.
+    Initializes user context from Supabase or default persona profile.
     
     Uses 'user:' prefix for cross-session persistence (persists across sessions
     when using DatabaseSessionService or VertexAiSessionService).
     
     Priority:
     1. Existing user state (from previous sessions via user: prefix)
-    2. Local data.json storage  
+    2. Supabase profile storage
     3. Default persona profile JSON
     """
-    from agent.tools import _load_data, _save_data
+    from agent.supabase_store import get_profile, save_profile
     
     # Check if user context is already initialized (cross-session persistence)
     if callback_context.state.get("user:initialized"):
@@ -94,31 +98,41 @@ def initialize_user_context(callback_context: CallbackContext):
         callback_context.state["current_time"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         return
     
-    # Try loading from local data storage first
-    data = _load_data()
-    profile = data.get("user_profile", {})
+    # Get user_id from context (default to parent_user)
+    user_id = callback_context.state.get("user_id", "parent_user")
     
-    # If no profile in data.json, load from default persona
+    # Try loading from Supabase first
+    profile = get_profile(user_id)
+    
+    # If no profile in Supabase, load from default persona
     if not profile:
         persona_data = _load_persona_profile()
         if persona_data and "state" in persona_data:
-            profile = persona_data["state"].get("user_profile", {})
-            # Save to data.json for persistence
-            data["user_profile"] = profile
-            
-            # Also load initial memories if present
-            initial_memories = persona_data.get("initial_memories", [])
-            if initial_memories and "long_term_memory" not in data:
-                data["long_term_memory"] = initial_memories
-            
-            _save_data(data)
+            persona_profile = persona_data["state"].get("user_profile", {})
+            if persona_profile:
+                # Save to Supabase for persistence
+                save_profile(user_id, {
+                    "name": persona_profile.get("name", "Friend"),
+                    "location": persona_profile.get("location", "Mumbai, India"),
+                    "age": persona_profile.get("age", 65),
+                    "interests": persona_profile.get("interests", [])
+                })
+                profile = persona_profile
     
     # Set user state with user: prefix for cross-session persistence
     if profile:
         callback_context.state["user:name"] = profile.get("name", "Friend")
         callback_context.state["user:location"] = profile.get("location", "Mumbai, India")
-        callback_context.state["user:age"] = profile.get("age", 65)
-        callback_context.state["user:interests"] = ", ".join(profile.get("interests", []))
+        # Age might be in preferences
+        age = profile.get("age", 65)
+        if not age and "preferences" in profile:
+            age = profile.get("preferences", {}).get("age", 65)
+        callback_context.state["user:age"] = age
+        # Interests might be in preferences
+        interests = profile.get("interests", [])
+        if not interests and "preferences" in profile:
+            interests = profile.get("preferences", {}).get("interests", [])
+        callback_context.state["user:interests"] = ", ".join(interests) if isinstance(interests, list) else interests
         callback_context.state["user:profile"] = profile
     else:
         # Fallback defaults for a warm, welcoming experience
@@ -336,6 +350,10 @@ root_agent = Agent(
         # Long-term memory (custom implementation)
         remember_fact,
         recall_memories,
+        # Video calls
+        initiate_video_call,
+        end_video_call,
+        get_available_contacts,
         # Web search (safely wrapped via AgentTool)
         search_tool,
     ],
