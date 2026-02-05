@@ -187,6 +187,78 @@
     font-size: 0.95rem;
 }
 
+/* Voice Input Group */
+.voice-input-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.voice-input-group input {
+    flex: 1;
+}
+
+.voice-btn {
+    width: 52px;
+    min-width: 52px;
+    height: auto;
+    border: 2px solid #e5e7eb;
+    border-radius: 1rem;
+    background: #f9fafb;
+    color: #6b7280;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.voice-btn:hover {
+    border-color: #16a34a;
+    color: #16a34a;
+    background: #f0fdf4;
+}
+
+.voice-btn.listening {
+    border-color: #ef4444;
+    background: #fef2f2;
+    color: #ef4444;
+    animation: pulse-listening 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-listening {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.listening-hint {
+    display: block;
+    color: #16a34a;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    font-style: italic;
+    animation: fade-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes fade-pulse {
+
+    0%,
+    100% {
+        opacity: 0.7;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
 /* ============================================================
    Interests Grid
 ============================================================ */
@@ -381,7 +453,7 @@
     margin: 0 0 0.5rem 0;
 }
 
-.complete-step > p {
+.complete-step>p {
     color: #6b7280;
     margin-bottom: 2rem;
 }
@@ -537,8 +609,13 @@
 ============================================================ */
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .spin {
@@ -553,36 +630,36 @@
     .onboarding {
         padding: 1rem;
     }
-    
+
     .step-content {
         padding: 1.5rem;
         border-radius: 1rem;
     }
-    
+
     .interests-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .interest-chip {
         padding: 0.875rem;
     }
-    
+
     .step-actions {
         flex-direction: column-reverse;
     }
-    
+
     .step-actions .secondary-btn {
         width: 100%;
     }
-    
+
     .welcome-step h1 {
         font-size: 1.75rem;
     }
-    
+
     .welcome-features {
         gap: 0.75rem;
     }
-    
+
     .feature {
         padding: 0.875rem;
         font-size: 1rem;

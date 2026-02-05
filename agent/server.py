@@ -723,6 +723,63 @@ async def run_scheduler_task(task_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== NOTIFICATION ENDPOINTS ====================
+
+# In-memory notification store (replace with DB in production)
+_notifications_store: dict = {}
+
+def _get_user_notifications(user_id: str) -> List[dict]:
+    """Get notifications for a user from the in-memory store."""
+    if user_id not in _notifications_store:
+        _notifications_store[user_id] = []
+    return _notifications_store[user_id]
+
+def _add_notification(user_id: str, notification: dict):
+    """Add a notification for a user."""
+    if user_id not in _notifications_store:
+        _notifications_store[user_id] = []
+    notification['id'] = f"notif_{len(_notifications_store[user_id])}_{datetime.now().timestamp()}"
+    notification['created_at'] = datetime.now().isoformat()
+    notification['is_read'] = False
+    _notifications_store[user_id].insert(0, notification)
+    # Keep only last 50 notifications
+    _notifications_store[user_id] = _notifications_store[user_id][:50]
+
+@app.get("/api/notifications/{user_id}")
+async def get_notifications(user_id: str):
+    """Get pending notifications for a user."""
+    notifications = _get_user_notifications(user_id)
+    unread = [n for n in notifications if not n.get('is_read', False)]
+    return {
+        "notifications": unread[:10],  # Return max 10 unread
+        "total_unread": len(unread)
+    }
+
+@app.post("/api/notifications/{notification_id}/dismiss")
+async def dismiss_notification(notification_id: str):
+    """Dismiss/mark a notification as read."""
+    for user_notifications in _notifications_store.values():
+        for notif in user_notifications:
+            if notif.get('id') == notification_id:
+                notif['is_read'] = True
+                return {"status": "success"}
+    return {"status": "not_found"}
+
+@app.post("/api/notifications/{user_id}/read-all")
+async def mark_all_notifications_read(user_id: str):
+    """Mark all notifications as read for a user."""
+    notifications = _get_user_notifications(user_id)
+    for notif in notifications:
+        notif['is_read'] = True
+    return {"status": "success", "count": len(notifications)}
+
+@app.post("/api/notifications/{user_id}/create")
+async def create_notification(user_id: str, notification: dict):
+    """Create a new notification (used by scheduler)."""
+    _add_notification(user_id, notification)
+    return {"status": "success"}
+
+
 # ==================== FAMILY PORTAL ENDPOINTS ====================
 
 @app.get("/api/family/{elder_user_id}/summary")
@@ -770,6 +827,92 @@ async def get_family_chat_history(elder_user_id: str, limit: int = 50):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/family/chat/{user_id}")
+async def get_chat_messages(user_id: str, limit: int = 100):
+    """Get chat messages for the Messages page."""
+    try:
+        chat_history = db_get_chat_history(user_id, limit=limit)
+        
+        # Transform to the format expected by the frontend
+        messages = []
+        for entry in chat_history:
+            messages.append({
+                "message": entry.get("message", ""),
+                "response": entry.get("response", ""),
+                "timestamp": entry.get("timestamp", "")
+            })
+        
+        return {
+            "messages": messages,
+            "total_count": len(messages)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== SETTINGS ENDPOINTS ====================
+
+# In-memory settings store (replace with DB in production)
+_settings_store: dict = {}
+
+def _get_default_settings():
+    """Return default settings structure."""
+    return {
+        "notifications": {
+            "morning_greeting": True,
+            "medication_reminders": True,
+            "appointment_reminders": True,
+            "check_ins": True,
+            "family_alerts": True
+        },
+        "emergency_contacts": [],
+        "medication_reminders": [],
+        "privacy": {
+            "share_with_family": True,
+            "share_location": False,
+            "share_health": True
+        }
+    }
+
+@app.get("/api/settings/{user_id}")
+async def get_user_settings(user_id: str):
+    """Get user settings."""
+    if user_id not in _settings_store:
+        _settings_store[user_id] = _get_default_settings()
+    return _settings_store[user_id]
+
+@app.put("/api/settings/{user_id}")
+async def update_user_settings(user_id: str, settings: dict):
+    """Update user settings."""
+    if user_id not in _settings_store:
+        _settings_store[user_id] = _get_default_settings()
+    
+    # Merge new settings with existing
+    for key, value in settings.items():
+        if isinstance(value, dict) and key in _settings_store[user_id]:
+            _settings_store[user_id][key].update(value)
+        else:
+            _settings_store[user_id][key] = value
+    
+    return {"status": "success", "settings": _settings_store[user_id]}
+
+@app.patch("/api/settings/{user_id}/{section}")
+async def update_settings_section(user_id: str, section: str, data: dict):
+    """Update a specific settings section."""
+    if user_id not in _settings_store:
+        _settings_store[user_id] = _get_default_settings()
+    
+    if section in _settings_store[user_id]:
+        if isinstance(_settings_store[user_id][section], dict):
+            _settings_store[user_id][section].update(data)
+        else:
+            _settings_store[user_id][section] = data
+    else:
+        _settings_store[user_id][section] = data
+    
+    return {"status": "success", "section": section, "data": _settings_store[user_id][section]}
 
 
 @app.get("/api/family/{elder_user_id}/wellness")

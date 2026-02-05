@@ -176,6 +176,180 @@ def get_expense_summary(
     }
 
 
+def analyze_spending_patterns(
+    tool_context: ToolContext
+) -> dict:
+    """
+    Analyzes user's spending patterns to detect insights and provide suggestions.
+    Used by the agent for proactive financial guidance.
+    
+    Args:
+        tool_context: ADK tool context
+    
+    Returns:
+        dict: Spending insights, trends, and recommendations
+    """
+    user_id = _get_user_id(tool_context)
+    
+    # Get expenses for this month and last month
+    this_month = get_expenses(user_id, period="month")
+    all_expenses = get_expenses(user_id, limit=100)
+    
+    insights = []
+    recommendations = []
+    
+    # Calculate totals by category
+    by_category = {}
+    total = 0
+    for e in this_month:
+        cat = e.get("category", "other")
+        amt = float(e.get("amount", 0) or 0)
+        by_category[cat] = by_category.get(cat, 0) + amt
+        total += amt
+    
+    # Find top spending category
+    if by_category:
+        top_category = max(by_category.keys(), key=lambda k: by_category[k])
+        top_amount = by_category[top_category]
+        insights.append({
+            "type": "top_spending",
+            "message": f"This month, you've spent the most on {top_category} (₹{top_amount:.0f})"
+        })
+        
+        # Check if any category is unusually high
+        avg_per_category = total / len(by_category) if by_category else 0
+        if top_amount > avg_per_category * 2:
+            recommendations.append({
+                "type": "spending_alert",
+                "message": f"Your {top_category} spending is higher than usual. Would you like to set a budget?"
+            })
+    
+    # Check for unusual single transactions
+    for e in this_month:
+        amt = float(e.get("amount", 0) or 0)
+        if amt > total * 0.3 and total > 0:  # Single expense > 30% of total
+            insights.append({
+                "type": "large_expense",
+                "message": f"Large expense detected: ₹{amt:.0f} for {e.get('description', e.get('category', 'unknown'))}"
+            })
+            break
+    
+    # Compare to typical spending
+    daily_avg = total / 30 if total > 0 else 0
+    if daily_avg > 0:
+        insights.append({
+            "type": "average",
+            "message": f"You're averaging ₹{daily_avg:.0f} per day this month"
+        })
+    
+    return {
+        "status": "success",
+        "total_this_month": total,
+        "by_category": by_category,
+        "insights": insights,
+        "recommendations": recommendations,
+        "summary": f"You've spent ₹{total:.0f} this month across {len(this_month)} transactions."
+    }
+
+
+def suggest_daily_activity(
+    tool_context: ToolContext
+) -> dict:
+    """
+    Suggests activities based on user's interests, weather, and recent patterns.
+    Used for proactive engagement and wellness encouragement.
+    
+    Args:
+        tool_context: ADK tool context
+    
+    Returns:
+        dict: Activity suggestions tailored to the user
+    """
+    from agent.supabase_store import get_profile
+    
+    user_id = _get_user_id(tool_context)
+    
+    # Get user profile and interests
+    profile = get_profile(user_id) or {}
+    interests = profile.get("interests", [])
+    
+    # Get recent activities to avoid repetition
+    recent = get_activities(user_id, limit=7)
+    recent_types = {a.get("activity_type") for a in recent}
+    
+    # Define activity suggestions by interest
+    activity_map = {
+        "walking": [
+            {"name": "Morning walk in the park", "type": "exercise", "duration": 30},
+            {"name": "Evening stroll around the colony", "type": "exercise", "duration": 20}
+        ],
+        "yoga": [
+            {"name": "Gentle yoga stretches", "type": "exercise", "duration": 20},
+            {"name": "Breathing exercises (pranayama)", "type": "wellness", "duration": 15}
+        ],
+        "reading": [
+            {"name": "Read a chapter of your book", "type": "leisure", "duration": 30},
+            {"name": "Browse the newspaper", "type": "leisure", "duration": 20}
+        ],
+        "gardening": [
+            {"name": "Water and tend to plants", "type": "hobby", "duration": 20},
+            {"name": "Repot a plant or add fertilizer", "type": "hobby", "duration": 30}
+        ],
+        "cooking": [
+            {"name": "Try a new recipe", "type": "hobby", "duration": 45},
+            {"name": "Prepare a special chai", "type": "leisure", "duration": 15}
+        ],
+        "music": [
+            {"name": "Listen to classical ragas", "type": "leisure", "duration": 30},
+            {"name": "Hum along to favorite bhajans", "type": "leisure", "duration": 20}
+        ],
+        "temple": [
+            {"name": "Morning prayers at home", "type": "spiritual", "duration": 15},
+            {"name": "Visit the neighborhood temple", "type": "spiritual", "duration": 30}
+        ],
+        "socializing": [
+            {"name": "Call a friend or relative", "type": "social", "duration": 20},
+            {"name": "Tea time with neighbors", "type": "social", "duration": 30}
+        ],
+        "grandchildren": [
+            {"name": "Video call with grandchildren", "type": "social", "duration": 20},
+            {"name": "Write a letter to grandchildren", "type": "leisure", "duration": 20}
+        ]
+    }
+    
+    # Get time-appropriate greeting
+    hour = datetime.now().hour
+    time_context = "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
+    
+    # Find suitable suggestions
+    suggestions = []
+    for interest in interests:
+        if interest in activity_map:
+            for activity in activity_map[interest]:
+                # Prefer activities not done recently
+                if activity["type"] not in recent_types:
+                    suggestions.append(activity)
+    
+    # Default suggestions if no interests match
+    if not suggestions:
+        suggestions = [
+            {"name": "Take a short walk outside", "type": "exercise", "duration": 15},
+            {"name": "Listen to some music", "type": "leisure", "duration": 20},
+            {"name": "Call a loved one", "type": "social", "duration": 15}
+        ]
+    
+    # Pick top 2 suggestions
+    top_suggestions = suggestions[:2]
+    
+    return {
+        "status": "success",
+        "time_of_day": time_context,
+        "suggestions": top_suggestions,
+        "based_on_interests": interests[:3] if interests else ["general"],
+        "message": f"Good {time_context}! Here are some activities you might enjoy today."
+    }
+
+
 # ==================== MOOD TRACKING TOOLS ====================
 
 def track_mood(

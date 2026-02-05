@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext'
 // New minimal pages
 import Chat from './pages/Chat'
 import QuickAdd from './pages/QuickAdd'
+import Messages from './pages/Messages'
 
 // Legacy pages (can be removed later if not needed)
 import LandingPage from './pages/LandingPage'
@@ -44,6 +45,7 @@ function App() {
         {/* New Minimal App Routes */}
         <Route path="/app" element={<Chat />} />
         <Route path="/app/quick-add" element={<QuickAdd />} />
+        <Route path="/app/messages" element={<Messages />} />
         <Route path="/app/settings" element={<Settings />} />
 
         {/* Legacy Parent Portal - redirect to new /app */}

@@ -11,10 +11,11 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { 
-    ChevronRight, ChevronLeft, User, MapPin, Heart, Users, 
-    Sparkles, Check, Plus, X, Mail, Send, Loader
+import {
+    ChevronRight, ChevronLeft, User, MapPin, Heart, Users,
+    Sparkles, Check, Plus, X, Mail, Send, Loader, Mic, MicOff
 } from 'lucide-react'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 import './Onboarding.css'
 
 // API helper
@@ -62,7 +63,7 @@ export default function Onboarding() {
     const [searchParams] = useSearchParams()
     const [currentStep, setCurrentStep] = useState(0)
     const [isLoading, setIsLoading] = useState(false)
-    
+
     // Form data across all steps
     const [formData, setFormData] = useState({
         // Profile
@@ -74,17 +75,17 @@ export default function Onboarding() {
         // Family members
         familyMembers: []
     })
-    
+
     // Check for invite acceptance
     const inviteToken = searchParams.get('invite')
-    
+
     useEffect(() => {
         if (inviteToken) {
             // Handle family member accepting invite
             navigate(`/invite/accept?token=${inviteToken}`)
         }
     }, [inviteToken, navigate])
-    
+
     const steps = [
         { id: 'welcome', title: 'Welcome', component: WelcomeStep },
         { id: 'profile', title: 'Profile', component: ProfileStep },
@@ -92,61 +93,61 @@ export default function Onboarding() {
         { id: 'family', title: 'Family', component: FamilyStep },
         { id: 'complete', title: 'Complete', component: CompleteStep }
     ]
-    
+
     const handleNext = () => {
         if (currentStep < steps.length - 1) {
             setCurrentStep(currentStep + 1)
         }
     }
-    
+
     const handleBack = () => {
         if (currentStep > 0) {
             setCurrentStep(currentStep - 1)
         }
     }
-    
+
     const handleComplete = async () => {
         setIsLoading(true)
-        
+
         // Save profile data
         const success = await saveOnboardingData(formData)
-        
+
         // Send family invites
         for (const member of formData.familyMembers) {
             if (member.email) {
                 await sendFamilyInvite('default_user', member)
             }
         }
-        
+
         setIsLoading(false)
-        
+
         if (success) {
             // Navigate to main app
             navigate('/parent')
         }
     }
-    
+
     const updateFormData = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }))
     }
-    
+
     const CurrentStepComponent = steps[currentStep].component
-    
+
     return (
         <div className="onboarding">
             {/* Progress indicator */}
             <div className="onboarding-progress">
                 {steps.map((step, idx) => (
-                    <div 
+                    <div
                         key={step.id}
                         className={`progress-dot ${idx === currentStep ? 'active' : ''} ${idx < currentStep ? 'completed' : ''}`}
                     />
                 ))}
             </div>
-            
+
             {/* Step content */}
             <div className="onboarding-content">
-                <CurrentStepComponent 
+                <CurrentStepComponent
                     formData={formData}
                     updateFormData={updateFormData}
                     onNext={handleNext}
@@ -174,7 +175,7 @@ function WelcomeStep({ onNext }) {
             <p className="welcome-tagline">
                 Your friendly companion for daily living
             </p>
-            
+
             <div className="welcome-features">
                 <div className="feature">
                     <span className="feature-icon">💬</span>
@@ -193,7 +194,7 @@ function WelcomeStep({ onNext }) {
                     <span>Gentle reminders when you need them</span>
                 </div>
             </div>
-            
+
             <button className="primary-btn" onClick={onNext}>
                 Get Started <ChevronRight size={20} />
             </button>
@@ -208,20 +209,41 @@ function WelcomeStep({ onNext }) {
 
 function ProfileStep({ formData, updateFormData, onNext, onBack }) {
     const [errors, setErrors] = useState({})
-    
+    const [activeField, setActiveField] = useState(null) // 'name' or 'location'
+    const voice = useVoiceInput()
+
+    // Handle voice transcript
+    useEffect(() => {
+        if (voice.transcript && activeField) {
+            updateFormData(activeField, voice.transcript)
+            setActiveField(null)
+            voice.clearTranscript()
+        }
+    }, [voice.transcript, activeField])
+
+    const toggleVoice = (field) => {
+        if (voice.isListening) {
+            voice.stopListening()
+            setActiveField(null)
+        } else {
+            setActiveField(field)
+            voice.startListening()
+        }
+    }
+
     const validate = () => {
         const newErrors = {}
         if (!formData.name.trim()) newErrors.name = 'Please enter your name'
         if (!formData.location.trim()) newErrors.location = 'Please enter your city'
-        
+
         setErrors(newErrors)
         return Object.keys(newErrors).length === 0
     }
-    
+
     const handleNext = () => {
         if (validate()) onNext()
     }
-    
+
     return (
         <div className="step-content profile-step">
             <div className="step-header">
@@ -229,19 +251,32 @@ function ProfileStep({ formData, updateFormData, onNext, onBack }) {
                 <h2>Tell us about yourself</h2>
                 <p>This helps Amble personalize your experience</p>
             </div>
-            
+
             <div className="form-group">
                 <label>What should we call you?</label>
-                <input
-                    type="text"
-                    placeholder="e.g., Lakshmi"
-                    value={formData.name}
-                    onChange={(e) => updateFormData('name', e.target.value)}
-                    className={errors.name ? 'error' : ''}
-                />
+                <div className="voice-input-group">
+                    <input
+                        type="text"
+                        placeholder="e.g., Lakshmi"
+                        value={formData.name}
+                        onChange={(e) => updateFormData('name', e.target.value)}
+                        className={errors.name ? 'error' : ''}
+                    />
+                    <button
+                        type="button"
+                        className={`voice-btn ${voice.isListening && activeField === 'name' ? 'listening' : ''}`}
+                        onClick={() => toggleVoice('name')}
+                        title="Speak your name"
+                    >
+                        {voice.isListening && activeField === 'name' ? <MicOff size={20} /> : <Mic size={20} />}
+                    </button>
+                </div>
                 {errors.name && <span className="error-text">{errors.name}</span>}
+                {voice.isListening && activeField === 'name' && (
+                    <span className="listening-hint">Listening... say your name</span>
+                )}
             </div>
-            
+
             <div className="form-group">
                 <label>Your age (optional)</label>
                 <input
@@ -253,21 +288,34 @@ function ProfileStep({ formData, updateFormData, onNext, onBack }) {
                     max="120"
                 />
             </div>
-            
+
             <div className="form-group">
                 <label>
                     <MapPin size={16} /> Where do you live?
                 </label>
-                <input
-                    type="text"
-                    placeholder="e.g., Pune"
-                    value={formData.location}
-                    onChange={(e) => updateFormData('location', e.target.value)}
-                    className={errors.location ? 'error' : ''}
-                />
+                <div className="voice-input-group">
+                    <input
+                        type="text"
+                        placeholder="e.g., Pune"
+                        value={formData.location}
+                        onChange={(e) => updateFormData('location', e.target.value)}
+                        className={errors.location ? 'error' : ''}
+                    />
+                    <button
+                        type="button"
+                        className={`voice-btn ${voice.isListening && activeField === 'location' ? 'listening' : ''}`}
+                        onClick={() => toggleVoice('location')}
+                        title="Speak your city"
+                    >
+                        {voice.isListening && activeField === 'location' ? <MicOff size={20} /> : <Mic size={20} />}
+                    </button>
+                </div>
                 {errors.location && <span className="error-text">{errors.location}</span>}
+                {voice.isListening && activeField === 'location' && (
+                    <span className="listening-hint">Listening... say your city</span>
+                )}
             </div>
-            
+
             <div className="step-actions">
                 <button className="secondary-btn" onClick={onBack}>
                     <ChevronLeft size={20} /> Back
@@ -309,7 +357,7 @@ function InterestsStep({ formData, updateFormData, onNext, onBack }) {
             updateFormData('interests', [...current, interestId])
         }
     }
-    
+
     return (
         <div className="step-content interests-step">
             <div className="step-header">
@@ -317,7 +365,7 @@ function InterestsStep({ formData, updateFormData, onNext, onBack }) {
                 <h2>What do you enjoy?</h2>
                 <p>Select your interests (you can change these later)</p>
             </div>
-            
+
             <div className="interests-grid">
                 {INTEREST_OPTIONS.map(interest => (
                     <button
@@ -333,7 +381,7 @@ function InterestsStep({ formData, updateFormData, onNext, onBack }) {
                     </button>
                 ))}
             </div>
-            
+
             <div className="step-actions">
                 <button className="secondary-btn" onClick={onBack}>
                     <ChevronLeft size={20} /> Back
@@ -356,7 +404,7 @@ const RELATION_OPTIONS = ['Son', 'Daughter', 'Spouse', 'Sibling', 'Grandchild', 
 function FamilyStep({ formData, updateFormData, onNext, onBack }) {
     const [showAddForm, setShowAddForm] = useState(false)
     const [newMember, setNewMember] = useState({ name: '', email: '', relation: 'Son' })
-    
+
     const addFamilyMember = () => {
         if (newMember.name.trim()) {
             updateFormData('familyMembers', [...formData.familyMembers, { ...newMember, id: Date.now() }])
@@ -364,11 +412,11 @@ function FamilyStep({ formData, updateFormData, onNext, onBack }) {
             setShowAddForm(false)
         }
     }
-    
+
     const removeFamilyMember = (id) => {
         updateFormData('familyMembers', formData.familyMembers.filter(m => m.id !== id))
     }
-    
+
     return (
         <div className="step-content family-step">
             <div className="step-header">
@@ -376,7 +424,7 @@ function FamilyStep({ formData, updateFormData, onNext, onBack }) {
                 <h2>Add your family</h2>
                 <p>They'll receive updates and can check in on you</p>
             </div>
-            
+
             {/* Added family members */}
             <div className="family-list">
                 {formData.familyMembers.map(member => (
@@ -390,7 +438,7 @@ function FamilyStep({ formData, updateFormData, onNext, onBack }) {
                                 </span>
                             )}
                         </div>
-                        <button 
+                        <button
                             className="remove-btn"
                             onClick={() => removeFamilyMember(member.id)}
                         >
@@ -399,7 +447,7 @@ function FamilyStep({ formData, updateFormData, onNext, onBack }) {
                     </div>
                 ))}
             </div>
-            
+
             {/* Add family form */}
             {showAddForm ? (
                 <div className="add-family-form">
@@ -437,11 +485,11 @@ function FamilyStep({ formData, updateFormData, onNext, onBack }) {
                     <Plus size={20} /> Add Family Member
                 </button>
             )}
-            
+
             <p className="skip-hint">
                 You can skip this and add family members later
             </p>
-            
+
             <div className="step-actions">
                 <button className="secondary-btn" onClick={onBack}>
                     <ChevronLeft size={20} /> Back
@@ -471,7 +519,7 @@ function CompleteStep({ formData, onBack, onComplete, isLoading }) {
             </div>
             <h2>You're all set, {formData.name || 'friend'}!</h2>
             <p>Amble is ready to be your daily companion</p>
-            
+
             <div className="summary-card">
                 <h3>Quick Summary</h3>
                 <div className="summary-item">
@@ -485,34 +533,34 @@ function CompleteStep({ formData, onBack, onComplete, isLoading }) {
                 <div className="summary-item">
                     <Heart size={18} />
                     <span>
-                        {formData.interests.length > 0 
-                            ? `${formData.interests.length} interests selected` 
+                        {formData.interests.length > 0
+                            ? `${formData.interests.length} interests selected`
                             : 'No interests selected'}
                     </span>
                 </div>
                 <div className="summary-item">
                     <Users size={18} />
                     <span>
-                        {formData.familyMembers.length > 0 
-                            ? `${formData.familyMembers.length} family members` 
+                        {formData.familyMembers.length > 0
+                            ? `${formData.familyMembers.length} family members`
                             : 'No family added yet'}
                     </span>
                 </div>
             </div>
-            
+
             {formData.familyMembers.length > 0 && (
                 <div className="invite-notice">
                     <Send size={18} />
                     <span>Invites will be sent to your family members</span>
                 </div>
             )}
-            
+
             <div className="step-actions">
                 <button className="secondary-btn" onClick={onBack}>
                     <ChevronLeft size={20} /> Back
                 </button>
-                <button 
-                    className="primary-btn complete-btn" 
+                <button
+                    className="primary-btn complete-btn"
                     onClick={onComplete}
                     disabled={isLoading}
                 >
@@ -540,13 +588,13 @@ export function InviteAccept() {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
     const token = searchParams.get('token')
-    
+
     const [inviteData, setInviteData] = useState(null)
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
-    
+
     useEffect(() => {
         // Validate invite token
         async function validateToken() {
@@ -563,7 +611,7 @@ export function InviteAccept() {
             }
             setIsLoading(false)
         }
-        
+
         if (token) {
             validateToken()
         } else {
@@ -571,18 +619,18 @@ export function InviteAccept() {
             setIsLoading(false)
         }
     }, [token])
-    
+
     const handleAccept = async () => {
         if (password !== confirmPassword) {
             setError('Passwords do not match')
             return
         }
-        
+
         if (password.length < 6) {
             setError('Password must be at least 6 characters')
             return
         }
-        
+
         setIsLoading(true)
         try {
             const response = await fetch(`${API_BASE}/api/invite/accept`, {
@@ -590,7 +638,7 @@ export function InviteAccept() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, password })
             })
-            
+
             if (response.ok) {
                 navigate('/family')
             } else {
@@ -602,7 +650,7 @@ export function InviteAccept() {
         }
         setIsLoading(false)
     }
-    
+
     if (isLoading) {
         return (
             <div className="onboarding invite-accept">
@@ -613,7 +661,7 @@ export function InviteAccept() {
             </div>
         )
     }
-    
+
     if (error && !inviteData) {
         return (
             <div className="onboarding invite-accept">
@@ -628,17 +676,17 @@ export function InviteAccept() {
             </div>
         )
     }
-    
+
     return (
         <div className="onboarding invite-accept">
             <div className="step-content">
                 <div className="welcome-icon">👨‍👩‍👧</div>
                 <h2>Join {inviteData?.elder_name}'s Circle</h2>
                 <p>
-                    You've been invited as <strong>{inviteData?.relation}</strong> to 
+                    You've been invited as <strong>{inviteData?.relation}</strong> to
                     stay connected with {inviteData?.elder_name} through Amble.
                 </p>
-                
+
                 <div className="form-group">
                     <label>Create a password</label>
                     <input
@@ -648,7 +696,7 @@ export function InviteAccept() {
                         onChange={(e) => setPassword(e.target.value)}
                     />
                 </div>
-                
+
                 <div className="form-group">
                     <label>Confirm password</label>
                     <input
@@ -658,10 +706,10 @@ export function InviteAccept() {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                     />
                 </div>
-                
+
                 {error && <div className="error-message">{error}</div>}
-                
-                <button 
+
+                <button
                     className="primary-btn complete-btn"
                     onClick={handleAccept}
                     disabled={isLoading}

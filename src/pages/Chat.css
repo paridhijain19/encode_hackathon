@@ -138,6 +138,54 @@
     margin: 0;
 }
 
+/* ==================== Memory Hints ==================== */
+
+.memory-hints {
+    background: rgba(196, 164, 132, 0.1);
+    border-radius: 16px;
+    padding: 16px 24px;
+    margin: 24px 0;
+    text-align: left;
+    max-width: 320px;
+    width: 100%;
+}
+
+/* Dynamic Single-Line Hint */
+.memory-hint-single {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, rgba(196, 164, 132, 0.12) 0%, rgba(176, 137, 104, 0.08) 100%);
+    border-radius: 50px;
+    margin: 24px auto;
+    max-width: 360px;
+    animation: hintFadeIn 0.5s ease;
+}
+
+@keyframes hintFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.memory-hint-single .hint-icon {
+    font-size: 1.1rem;
+}
+
+.memory-hint-single .hint-text {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+}
+
 /* ==================== Avatar ==================== */
 
 .amble-avatar {
@@ -422,6 +470,68 @@
 .send-btn:disabled {
     background: #CCCCCC;
     cursor: not-allowed;
+}
+
+/* ==================== TTS Toggle ==================== */
+
+.tts-toggle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: #999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tts-toggle:hover {
+    color: #666;
+    background: #F5F5F5;
+}
+
+.tts-toggle.active {
+    color: #4CAF50;
+}
+
+/* ==================== Interim Transcript ==================== */
+
+.interim-transcript {
+    position: fixed;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(76, 175, 80, 0.95);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95rem;
+    box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3);
+    animation: slideUp 0.3s ease;
+    z-index: 100;
+    max-width: 80%;
+}
+
+.interim-transcript .pulse {
+    animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes slideUp {
+    from {
+        bottom: 100px;
+        opacity: 0;
+    }
+
+    to {
+        bottom: 120px;
+        opacity: 1;
+    }
 }
 
 /* ==================== Responsive ==================== */
