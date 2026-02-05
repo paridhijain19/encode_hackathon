@@ -1,12 +1,16 @@
 import { useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+
+// New minimal pages
+import Chat from './pages/Chat'
+import QuickAdd from './pages/QuickAdd'
+
+// Legacy pages (can be removed later if not needed)
 import LandingPage from './pages/LandingPage'
-import ParentPortal from './pages/ParentPortal'
 import FamilyDashboard from './pages/FamilyDashboard'
 import Onboarding, { InviteAccept } from './pages/Onboarding'
 import Settings from './pages/Settings'
-import SmartHome from './components/SmartHome'
 
 // Register service worker for PWA
 const registerServiceWorker = async () => {
@@ -30,13 +34,26 @@ function App() {
   return (
     <AuthProvider>
       <Routes>
+        {/* Landing Page */}
         <Route path="/" element={<LandingPage />} />
+
+        {/* Onboarding */}
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/invite/accept" element={<InviteAccept />} />
-        <Route path="/parent/*" element={<ParentPortal />} />
+
+        {/* New Minimal App Routes */}
+        <Route path="/app" element={<Chat />} />
+        <Route path="/app/quick-add" element={<QuickAdd />} />
+        <Route path="/app/settings" element={<Settings />} />
+
+        {/* Legacy Parent Portal - redirect to new /app */}
+        <Route path="/parent/*" element={<Navigate to="/app" replace />} />
+
+        {/* Family Dashboard (keeping for now) */}
         <Route path="/family/*" element={<FamilyDashboard />} />
+
+        {/* Settings */}
         <Route path="/settings" element={<Settings />} />
-        <Route path="/smart-home" element={<SmartHome />} />
       </Routes>
     </AuthProvider>
   )

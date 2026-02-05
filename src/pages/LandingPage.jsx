@@ -18,7 +18,7 @@ function LandingPage() {
                         <a href="#about">About</a>
                     </div>
                     <div className="nav-actions">
-                        <Link to="/parent" className="btn btn-outline">My Dashboard</Link>
+                        <Link to="/app" className="btn btn-outline">Start Chatting</Link>
                         <Link to="/family" className="btn btn-primary">Family Portal</Link>
                     </div>
                 </div>
@@ -39,7 +39,7 @@ function LandingPage() {
                             not the other way around.
                         </p>
                         <div className="hero-cta">
-                            <Link to="/parent" className="btn btn-primary btn-lg">
+                            <Link to="/app" className="btn btn-primary btn-lg">
                                 <span>🌱</span> Get Started
                             </Link>
                             <Link to="/family" className="btn btn-secondary btn-lg">
@@ -233,7 +233,7 @@ function LandingPage() {
                     <h2>Ready to Start Your Journey?</h2>
                     <p>Join thousands of people who are living better, more connected lives with Amble</p>
                     <div className="cta-buttons">
-                        <Link to="/parent" className="btn btn-white btn-lg">Try Amble Free</Link>
+                        <Link to="/app" className="btn btn-white btn-lg">Try Amble Free</Link>
                         <Link to="/family" className="btn btn-outline-white btn-lg">Family Portal</Link>
                     </div>
                 </div>

@@ -27,3 +27,4 @@ agent/_pycache_
 \venv
 .env
 \node_modules
+\__pycache__

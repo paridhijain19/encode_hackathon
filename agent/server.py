@@ -947,8 +947,141 @@ async def get_unread_messages(user_id: str, elder_user_id: str = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== DIRECT DATA ENDPOINTS (NO AGENT) ====================
+"""
+These endpoints allow manual data entry directly to the database
+without invoking the AI agent. Use these for form-based inputs.
+"""
+
+from agent.supabase_store import save_expense, save_activity, save_appointment
+
+
+class DirectExpenseRequest(BaseModel):
+    """Request for direct expense entry."""
+    user_id: str
+    amount: float
+    category: str
+    description: str = ""
+
+
+class DirectHealthRequest(BaseModel):
+    """Request for direct health/activity entry."""
+    user_id: str
+    activity_type: str  # e.g., 'blood_pressure', 'medication', 'exercise'
+    value: str
+    notes: str = ""
+
+
+class DirectAppointmentRequest(BaseModel):
+    """Request for direct appointment entry."""
+    user_id: str
+    title: str
+    date: str  # YYYY-MM-DD
+    time: str = "09:00"  # HH:MM
+    location: str = ""
+
+
+@app.post("/api/expenses")
+async def add_expense_direct(request: DirectExpenseRequest):
+    """
+    Add an expense directly to the database (no agent involved).
+    
+    This is for manual form entries where the user explicitly adds
+    an expense without going through the conversational agent.
+    """
+    try:
+        success = save_expense(
+            user_id=request.user_id,
+            amount=request.amount,
+            category=request.category,
+            description=request.description
+        )
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Added expense: ₹{request.amount} for {request.category}"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save expense to database")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/health")
+async def add_health_record_direct(request: DirectHealthRequest):
+    """
+    Add a health record/activity directly to the database (no agent involved).
+    
+    This is for manual form entries like logging blood pressure,
+    tracking medication, or recording exercise.
+    """
+    try:
+        # Map health record types to activity format
+        activity_type = request.activity_type
+        description = f"{request.activity_type}: {request.value}"
+        if request.notes:
+            description += f" - {request.notes}"
+        
+        # For medication/exercise, estimate duration
+        duration = None
+        if activity_type == 'exercise':
+            # Try to extract duration from value (e.g., "30 min walk")
+            import re
+            match = re.search(r'(\d+)\s*min', request.value.lower())
+            if match:
+                duration = int(match.group(1))
+        
+        success = save_activity(
+            user_id=request.user_id,
+            activity_type=activity_type,
+            description=description,
+            duration_minutes=duration
+        )
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Recorded {request.activity_type}: {request.value}"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save health record to database")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/appointments")
+async def add_appointment_direct(request: DirectAppointmentRequest):
+    """
+    Add an appointment directly to the database (no agent involved).
+    
+    This is for manual form entries where the user explicitly adds
+    an appointment without going through the conversational agent.
+    """
+    try:
+        success = save_appointment(
+            user_id=request.user_id,
+            title=request.title,
+            description="",  # Can be expanded later
+            date=request.date,
+            time=request.time,
+            location=request.location
+        )
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Added appointment: {request.title} on {request.date}"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save appointment to database")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== MAIN ====================
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

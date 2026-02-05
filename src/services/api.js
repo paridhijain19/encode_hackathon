@@ -17,7 +17,7 @@ const API_BASE = 'http://localhost:8000'
 export async function sendMessage(message, userId = 'default_user', sessionId = null, retryCount = 0) {
     const MAX_RETRIES = 2
     const RETRY_DELAY = 3000 // 3 seconds
-    
+
     try {
         const response = await fetch(`${API_BASE}/chat`, {
             method: 'POST',
@@ -34,21 +34,21 @@ export async function sendMessage(message, userId = 'default_user', sessionId = 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}))
             const errorMessage = errorData.detail || `HTTP ${response.status}: ${response.statusText}`
-            
+
             // If session not found error, clear local session and retry
             if (errorMessage.includes('Session not found') && retryCount < MAX_RETRIES) {
                 console.log('Session invalid, clearing and retrying...')
                 clearSession()
                 return sendMessage(message, userId, null, retryCount + 1)
             }
-            
+
             // Retry on rate limit (429) or server error (500) if we have retries left
             if ((response.status === 429 || response.status === 500) && retryCount < MAX_RETRIES) {
-                console.log(`Rate limited or server error, retrying in ${RETRY_DELAY/1000}s... (attempt ${retryCount + 1}/${MAX_RETRIES})`)
+                console.log(`Rate limited or server error, retrying in ${RETRY_DELAY / 1000}s... (attempt ${retryCount + 1}/${MAX_RETRIES})`)
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
                 return sendMessage(message, userId, sessionId, retryCount + 1)
             }
-            
+
             throw new Error(errorMessage)
         }
 
@@ -161,4 +161,122 @@ export function saveUserId(userId) {
  */
 export function getUserId() {
     return localStorage.getItem(USER_KEY) || 'default_user'
+}
+
+
+// ==================== DIRECT DATABASE ENDPOINTS (NO AGENT) ====================
+
+/**
+ * Add an expense directly to the database (no agent involved)
+ * @param {string} userId - User identifier
+ * @param {Object} expense - { amount: number, category: string, description: string }
+ */
+export async function addExpense(userId, expense) {
+    try {
+        const response = await fetch(`${API_BASE}/api/expenses`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: userId,
+                amount: expense.amount,
+                category: expense.category,
+                description: expense.description || '',
+            }),
+        })
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}))
+            throw new Error(error.detail || `HTTP ${response.status}`)
+        }
+
+        return await response.json()
+    } catch (error) {
+        console.error('API Error (addExpense):', error)
+        throw error
+    }
+}
+
+/**
+ * Add a health record directly to the database (no agent involved)
+ * @param {string} userId - User identifier  
+ * @param {Object} record - { type: string, value: string, notes: string }
+ */
+export async function addHealthRecord(userId, record) {
+    try {
+        const response = await fetch(`${API_BASE}/api/health`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: userId,
+                activity_type: record.type,
+                value: record.value,
+                notes: record.notes || '',
+            }),
+        })
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}))
+            throw new Error(error.detail || `HTTP ${response.status}`)
+        }
+
+        return await response.json()
+    } catch (error) {
+        console.error('API Error (addHealthRecord):', error)
+        throw error
+    }
+}
+
+/**
+ * Add an appointment directly to the database (no agent involved)
+ * @param {string} userId - User identifier
+ * @param {Object} appointment - { title: string, date: string, time: string, location: string }
+ */
+export async function addAppointment(userId, appointment) {
+    try {
+        const response = await fetch(`${API_BASE}/api/appointments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: userId,
+                title: appointment.title,
+                date: appointment.date,
+                time: appointment.time || '09:00',
+                location: appointment.location || '',
+            }),
+        })
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}))
+            throw new Error(error.detail || `HTTP ${response.status}`)
+        }
+
+        return await response.json()
+    } catch (error) {
+        console.error('API Error (addAppointment):', error)
+        throw error
+    }
+}
+
+/**
+ * Get recent data (expenses, activities, appointments) - for displaying lists
+ * @param {string} userId - User identifier
+ */
+export async function getRecentData(userId) {
+    try {
+        const response = await fetch(`${API_BASE}/api/state?user_id=${encodeURIComponent(userId)}`)
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`)
+        }
+
+        return await response.json()
+    } catch (error) {
+        console.error('API Error (getRecentData):', error)
+        return {
+            expenses: [],
+            activities: [],
+            appointments: [],
+            moods: [],
+        }
+    }
 }
