@@ -10,6 +10,7 @@ import Messages from './pages/Messages'
 // Legacy pages (can be removed later if not needed)
 import LandingPage from './pages/LandingPage'
 import FamilyDashboard from './pages/FamilyDashboard'
+import UserDashboard from './pages/UserDashboard'
 import Onboarding, { InviteAccept } from './pages/Onboarding'
 import Settings from './pages/Settings'
 
@@ -47,6 +48,9 @@ function App() {
         <Route path="/app/quick-add" element={<QuickAdd />} />
         <Route path="/app/messages" element={<Messages />} />
         <Route path="/app/settings" element={<Settings />} />
+
+        {/* User Dashboard */}
+        <Route path="/dashboard/*" element={<UserDashboard />} />
 
         {/* Legacy Parent Portal - redirect to new /app */}
         <Route path="/parent/*" element={<Navigate to="/app" replace />} />

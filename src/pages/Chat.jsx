@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Send, Mic, Home, MessageCircle, Settings, Plus, MicOff, Volume2, VolumeX } from 'lucide-react'
+import { Send, Mic, Home, MessageCircle, Settings, Plus, MicOff, Volume2, VolumeX, ArrowLeft, Grid3X3 } from 'lucide-react'
 import { useAgent } from '../hooks/useAgent'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
@@ -245,32 +245,34 @@ export default function Chat() {
 
             {/* Sidebar */}
             <aside className="chat-sidebar">
-                <div className="sidebar-header">
+                <Link to="/" className="sidebar-header">
                     <AmbleAvatar size="small" />
                     <span className="sidebar-title">Amble</span>
-                </div>
-
-                <div className="sidebar-input">
-                    <input
-                        type="text"
-                        placeholder="Ask me anything..."
-                        disabled
-                    />
-                    <Mic size={18} />
-                </div>
+                </Link>
 
                 <nav className="sidebar-nav">
+                    <Link to="/" className="nav-link back-link">
+                        <ArrowLeft size={24} />
+                    </Link>
+                    <Link to="/dashboard" className="nav-link">
+                        <Grid3X3 size={24} />
+                        <span className="nav-label">Dashboard</span>
+                    </Link>
                     <Link to="/app" className="nav-link active">
-                        <Home size={20} />
+                        <Home size={24} />
+                        <span className="nav-label">Chat</span>
                     </Link>
                     <Link to="/app/messages" className="nav-link">
-                        <MessageCircle size={20} />
+                        <MessageCircle size={24} />
+                        <span className="nav-label">Messages</span>
                     </Link>
                     <Link to="/app/quick-add" className="nav-link">
-                        <Plus size={20} />
+                        <Plus size={24} />
+                        <span className="nav-label">Quick Add</span>
                     </Link>
                     <Link to="/app/settings" className="nav-link">
-                        <Settings size={20} />
+                        <Settings size={24} />
+                        <span className="nav-label">Settings</span>
                     </Link>
                 </nav>
             </aside>

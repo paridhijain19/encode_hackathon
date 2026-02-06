@@ -39,7 +39,7 @@ function LandingPage() {
                             not the other way around.
                         </p>
                         <div className="hero-cta">
-                            <Link to="/app" className="btn btn-primary btn-lg">
+                            <Link to="/onboarding" className="btn btn-primary btn-lg">
                                 <span>🌱</span> Get Started
                             </Link>
                             <Link to="/family" className="btn btn-secondary btn-lg">
