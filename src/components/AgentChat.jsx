@@ -42,6 +42,24 @@ export function AgentChat({
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages])
 
+    // Cleanup voice and TTS when overlay closes or component unmounts
+    useEffect(() => {
+        return () => {
+            stopListening()
+            stopSpeaking()
+        }
+    }, [])
+
+    // Stop voice/TTS when overlay is closed
+    useEffect(() => {
+        if (!isOpen) {
+            stopListening()
+            stopSpeaking()
+            // Reset last spoken message when closing
+            lastSpokenMsgRef.current = null
+        }
+    }, [isOpen, stopListening, stopSpeaking])
+
     // Handle voice transcript
     useEffect(() => {
         if (transcript && !isLoading) {

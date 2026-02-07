@@ -33,6 +33,15 @@ export function useTextToSpeech() {
         }
     }, [])
 
+    // Cleanup effect - stop speech when component unmounts
+    useEffect(() => {
+        return () => {
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel()
+            }
+        }
+    }, [])
+
     /**
      * Get the best voice for elderly users
      * Prefers English (India) or English (US) female voices

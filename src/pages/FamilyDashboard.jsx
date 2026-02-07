@@ -12,8 +12,6 @@ import VideoCall, { CallFamilyWidget } from '../components/VideoCall'
 
 // API helper
 const API_BASE = 'http://localhost:8000'
-// The elder user ID is always parent_user (the one we're monitoring)
-const ELDER_USER_ID = 'parent_user'
 
 // ==================== Helper Functions ====================
 
@@ -85,9 +83,10 @@ function aggregateExpensesByCategory(expenses) {
 
 // ==================== API Functions ====================
 
-async function fetchFamilySummary() {
+async function fetchFamilySummary(elderId) {
+    if (!elderId) return null
     try {
-        const response = await fetch(`${API_BASE}/api/family/${ELDER_USER_ID}/summary`)
+        const response = await fetch(`${API_BASE}/api/family/${elderId}/summary`)
         if (response.ok) {
             return await response.json()
         }
@@ -97,9 +96,10 @@ async function fetchFamilySummary() {
     return null
 }
 
-async function fetchAlerts() {
+async function fetchAlerts(elderId) {
+    if (!elderId) return { alerts: [], unread_count: 0 }
     try {
-        const response = await fetch(`${API_BASE}/api/family/${ELDER_USER_ID}/alerts`)
+        const response = await fetch(`${API_BASE}/api/family/${elderId}/alerts`)
         if (response.ok) {
             return await response.json()
         }
@@ -109,9 +109,10 @@ async function fetchAlerts() {
     return { alerts: [], unread_count: 0 }
 }
 
-async function fetchChatHistory() {
+async function fetchChatHistory(elderId) {
+    if (!elderId) return { chat_history: [], total_count: 0 }
     try {
-        const response = await fetch(`${API_BASE}/api/family/${ELDER_USER_ID}/chat-history?limit=50`)
+        const response = await fetch(`${API_BASE}/api/family/${elderId}/chat-history?limit=50`)
         if (response.ok) {
             return await response.json()
         }
@@ -121,9 +122,10 @@ async function fetchChatHistory() {
     return { chat_history: [], total_count: 0 }
 }
 
-async function fetchWellness() {
+async function fetchWellness(elderId) {
+    if (!elderId) return { recent_moods: [], recent_activities: [], wellness_score: 0 }
     try {
-        const response = await fetch(`${API_BASE}/api/family/${ELDER_USER_ID}/wellness`)
+        const response = await fetch(`${API_BASE}/api/family/${elderId}/wellness`)
         if (response.ok) {
             return await response.json()
         }
@@ -133,9 +135,10 @@ async function fetchWellness() {
     return { recent_moods: [], recent_activities: [], wellness_score: 0 }
 }
 
-async function fetchExpenses() {
+async function fetchExpenses(elderId) {
+    if (!elderId) return { recent_expenses: [], total_spent: 0, by_category: [] }
     try {
-        const response = await fetch(`${API_BASE}/api/family/${ELDER_USER_ID}/expenses`)
+        const response = await fetch(`${API_BASE}/api/family/${elderId}/expenses`)
         if (response.ok) {
             return await response.json()
         }
@@ -145,9 +148,10 @@ async function fetchExpenses() {
     return { recent_expenses: [], total_spent: 0, by_category: [] }
 }
 
-async function markAlertRead(alertId) {
+async function markAlertRead(elderId, alertId) {
+    if (!elderId) return
     try {
-        await fetch(`${API_BASE}/api/family/${ELDER_USER_ID}/alert/${alertId}/read`, {
+        await fetch(`${API_BASE}/api/family/${elderId}/alert/${alertId}/read`, {
             method: 'POST'
         })
     } catch (error) {
@@ -163,24 +167,30 @@ function FamilyDashboard() {
     const [alertsData, setAlertsData] = useState({ alerts: [], unread_count: 0 })
     const [isLoading, setIsLoading] = useState(true)
     const [realtimeConnected, setRealtimeConnected] = useState(false)
+    const [showElderPicker, setShowElderPicker] = useState(false)
     
     // Video call state
     const [activeCall, setActiveCall] = useState(null)
     
     // Auth context - family members need to sign in
-    const { currentUser, isSignedIn, isLoading: authLoading } = useAuth()
+    const { currentUser, isSignedIn, isLoading: authLoading, linkedElder, linkToElder, registeredUsers } = useAuth()
     const needsSignIn = !authLoading && !isSignedIn
+    
+    // Get the elder ID to monitor
+    const elderId = linkedElder?.id
+    const needsElderLink = isSignedIn && currentUser?.role !== 'parent' && !elderId
 
     const loadData = useCallback(async () => {
+        if (!elderId) return
         setIsLoading(true)
         const [summary, alerts] = await Promise.all([
-            fetchFamilySummary(),
-            fetchAlerts()
+            fetchFamilySummary(elderId),
+            fetchAlerts(elderId)
         ])
         setFamilyData(summary)
         setAlertsData(alerts)
         setIsLoading(false)
-    }, [])
+    }, [elderId])
 
     // Real-time subscription handlers
     const handleRealtimeUpdate = useCallback((table, payload) => {
@@ -208,10 +218,12 @@ function FamilyDashboard() {
     }, [loadData])
 
     useEffect(() => {
+        if (!elderId) return
+        
         loadData()
         
         // Set up real-time subscriptions
-        const subscriptions = subscribeToAllUpdates(ELDER_USER_ID, {
+        const subscriptions = subscribeToAllUpdates(elderId, {
             onAlerts: (payload) => handleRealtimeUpdate('alerts', payload),
             onActivities: (payload) => handleRealtimeUpdate('activities', payload),
             onMoods: (payload) => handleRealtimeUpdate('moods', payload),
@@ -229,7 +241,7 @@ function FamilyDashboard() {
             clearInterval(interval)
             unsubscribeAll(subscriptions)
         }
-    }, [loadData, handleRealtimeUpdate])
+    }, [elderId, loadData, handleRealtimeUpdate])
 
     // Video call handlers
     const handleStartCall = (member, callType) => {
@@ -254,18 +266,53 @@ function FamilyDashboard() {
         { id: 'family', path: '/family/network', icon: Users, label: 'Circle' },
     ]
 
-    // Derive parent data from backend or use defaults
+    // Derive parent data from backend or linked elder
     const parentData = {
-        name: familyData?.user_profile?.name || 'Mom',
+        id: elderId || linkedElder?.id,
+        name: familyData?.user_profile?.name || linkedElder?.name || 'Parent',
         location: familyData?.user_profile?.location || 'Home',
         status: familyData?.last_interaction ? `Active ${getTimeAgo(familyData.last_interaction)}` : 'Active recently',
-        avatar: '👩‍🦳',
+        avatar: linkedElder?.avatar || '👩‍🦳',
     }
 
     const isActive = (path) => {
         if (path === '/family') return location.pathname === '/family'
         return location.pathname.startsWith(path)
     }
+    
+    // Elder picker component for when family member needs to select which elder to monitor
+    const ElderPickerModal = () => (
+        <div className="signin-overlay">
+            <div className="signin-modal" style={{ maxWidth: '450px' }}>
+                <div className="signin-header">
+                    <span className="signin-icon">👨‍👩‍👧</span>
+                    <h2>Select Parent to Monitor</h2>
+                    <p>Choose which family member you'd like to stay connected with</p>
+                </div>
+                <div className="signin-options">
+                    {registeredUsers.parents.map(parent => (
+                        <button 
+                            key={parent.id}
+                            className="signin-option signin-parent"
+                            onClick={() => {
+                                linkToElder(parent)
+                                setShowElderPicker(false)
+                            }}
+                        >
+                            <span className="signin-avatar">{parent.avatar}</span>
+                            <span className="signin-name">{parent.name}</span>
+                            <span className="signin-role">{parent.location || 'Home'}</span>
+                        </button>
+                    ))}
+                    {registeredUsers.parents.length === 0 && (
+                        <p style={{ textAlign: 'center', color: '#64748b', padding: '1rem' }}>
+                            No registered parents found. Ask your family elder to create an account first.
+                        </p>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
 
     return (
         <div className="family-dashboard">
@@ -285,6 +332,11 @@ function FamilyDashboard() {
                     mode="family" 
                     onClose={null}
                 />
+            )}
+            
+            {/* Elder Picker Modal - shows when family member needs to select which elder to monitor */}
+            {(needsElderLink || showElderPicker) && !needsSignIn && (
+                <ElderPickerModal />
             )}
 
             {/* Sidebar */}
@@ -329,14 +381,16 @@ function FamilyDashboard() {
                 <div className="sidebar-actions">
                     <button 
                         className="action-btn call"
-                        onClick={() => handleStartCall({ id: ELDER_USER_ID, name: parentData.name }, 'audio')}
+                        onClick={() => handleStartCall({ id: elderId, name: parentData.name }, 'audio')}
+                        disabled={!elderId}
                     >
                         <Phone size={18} />
                         <span>Call</span>
                     </button>
                     <button 
                         className="action-btn video"
-                        onClick={() => handleStartCall({ id: ELDER_USER_ID, name: parentData.name }, 'video')}
+                        onClick={() => handleStartCall({ id: elderId, name: parentData.name }, 'video')}
+                        disabled={!elderId}
                     >
                         <Video size={18} />
                         <span>Video</span>
@@ -369,7 +423,8 @@ function FamilyDashboard() {
             {/* Mobile floating call button */}
             <button 
                 className="mobile-call-fab"
-                onClick={() => handleStartCall({ id: ELDER_USER_ID, name: parentData.name }, 'video')}
+                onClick={() => handleStartCall({ id: elderId, name: parentData.name }, 'video')}
+                disabled={!elderId}
                 style={{
                     position: 'fixed',
                     bottom: '20px',
@@ -591,18 +646,21 @@ function DashboardHome({ data, familyData, alertsData, isLoading }) {
 
 /* Chat History - View elder's conversations with Amble */
 function ChatHistory() {
+    const { linkedElder } = useAuth()
+    const elderId = linkedElder?.id
     const [chatData, setChatData] = useState({ chat_history: [], total_count: 0 })
     const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
         const loadChats = async () => {
+            if (!elderId) return
             setIsLoading(true)
-            const data = await fetchChatHistory()
+            const data = await fetchChatHistory(elderId)
             setChatData(data)
             setIsLoading(false)
         }
         loadChats()
-    }, [])
+    }, [elderId])
 
     const formatTime = (timestamp) => {
         if (!timestamp) return ''
@@ -757,18 +815,21 @@ function ChatHistory() {
 
 /* Activity Feed - Real activity data */
 function ActivityFeed() {
+    const { linkedElder } = useAuth()
+    const elderId = linkedElder?.id
     const [activityData, setActivityData] = useState({ recent_activities: [] })
     const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
         const loadData = async () => {
+            if (!elderId) return
             setIsLoading(true)
-            const data = await fetchWellness()
+            const data = await fetchWellness(elderId)
             setActivityData(data)
             setIsLoading(false)
         }
         loadData()
-    }, [])
+    }, [elderId])
 
     return (
         <div className="activity-feed">
@@ -825,18 +886,21 @@ function ActivityFeed() {
 
 /* Budget Insights - Real expense data */
 function BudgetInsights() {
+    const { linkedElder } = useAuth()
+    const elderId = linkedElder?.id
     const [expenseData, setExpenseData] = useState({ recent_expenses: [], total_spent: 0, by_category: [] })
     const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
         const loadData = async () => {
+            if (!elderId) return
             setIsLoading(true)
-            const data = await fetchExpenses()
+            const data = await fetchExpenses(elderId)
             setExpenseData(data)
             setIsLoading(false)
         }
         loadData()
-    }, [])
+    }, [elderId])
 
     return (
         <div className="budget-insights">
@@ -915,18 +979,21 @@ function BudgetInsights() {
 
 /* Health Dashboard - Real wellness data */
 function HealthDashboard() {
+    const { linkedElder } = useAuth()
+    const elderId = linkedElder?.id
     const [wellnessData, setWellnessData] = useState({ recent_moods: [], recent_activities: [], wellness_score: 0 })
     const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
         const loadData = async () => {
+            if (!elderId) return
             setIsLoading(true)
-            const data = await fetchWellness()
+            const data = await fetchWellness(elderId)
             setWellnessData(data)
             setIsLoading(false)
         }
         loadData()
-    }, [])
+    }, [elderId])
 
     return (
         <div className="health-dashboard">
@@ -987,23 +1054,26 @@ function HealthDashboard() {
 
 /* Alerts View - Real alerts data */
 function AlertsView() {
+    const { linkedElder } = useAuth()
+    const elderId = linkedElder?.id
     const [alertsData, setAlertsData] = useState({ alerts: [], unread_count: 0 })
     const [familyAlerts, setFamilyAlerts] = useState([])
     const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
         const loadData = async () => {
+            if (!elderId) return
             setIsLoading(true)
             const [alerts, summary] = await Promise.all([
-                fetchAlerts(),
-                fetchFamilySummary()
+                fetchAlerts(elderId),
+                fetchFamilySummary(elderId)
             ])
             setAlertsData(alerts)
             setFamilyAlerts(summary?.alerts || [])
             setIsLoading(false)
         }
         loadData()
-    }, [])
+    }, [elderId])
 
     // Combine system alerts and family alerts
     const allAlerts = [...(alertsData.alerts || []), ...(familyAlerts || [])]

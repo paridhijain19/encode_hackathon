@@ -20,9 +20,21 @@ export function SignInModal({ onClose, mode = 'all' }) {
     const [showCreateForm, setShowCreateForm] = useState(false)
     const [newUser, setNewUser] = useState({ name: '', role: 'parent', avatar: '👵', relation: '' })
     const [isCreating, setIsCreating] = useState(false)
+    
+    // Refresh users on mount
+    useEffect(() => {
+        refreshUsers()
+    }, [refreshUsers])
 
     const handleSignIn = (user) => {
-        signIn(user)
+        // For family members, automatically link to the first available parent
+        if (user.role !== 'parent') {
+            const elderToLink = registeredUsers.parents[0] || null
+            signIn(user, elderToLink)
+        } else {
+            // For parents, they link to themselves
+            signIn(user, user)
+        }
         if (onClose) onClose()
         if (user.role === 'parent') {
             navigate('/app')
@@ -94,33 +106,41 @@ export function SignInModal({ onClose, mode = 'all' }) {
                             {(activeTab === 'parent' || mode === 'parent') && (
                                 <>
                                     <p className="signin-label">Select your account</p>
-                                    {parents.map(parent => (
-                                        <button 
-                                            key={parent.id}
-                                            className="signin-option signin-parent"
-                                            onClick={() => handleSignIn(parent)}
-                                        >
-                                            <span className="signin-avatar">{parent.avatar}</span>
-                                            <span className="signin-name">{parent.name}</span>
-                                            <span className="signin-role">Elder</span>
-                                        </button>
-                                    ))}
+                                    {parents.length > 0 ? (
+                                        parents.map(parent => (
+                                            <button 
+                                                key={parent.id}
+                                                className="signin-option signin-parent"
+                                                onClick={() => handleSignIn(parent)}
+                                            >
+                                                <span className="signin-avatar">{parent.avatar}</span>
+                                                <span className="signin-name">{parent.name}</span>
+                                                <span className="signin-role">{parent.location || 'Elder'}</span>
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <p className="signin-empty">No accounts found. Create one to get started!</p>
+                                    )}
                                 </>
                             )}
                             {(activeTab === 'family' || mode === 'family') && (
                                 <>
                                     <p className="signin-label">Select your account</p>
-                                    {family.map(member => (
-                                        <button 
-                                            key={member.id}
-                                            className="signin-option signin-family"
-                                            onClick={() => handleSignIn(member)}
-                                        >
-                                            <span className="signin-avatar">{member.avatar}</span>
-                                            <span className="signin-name">{member.name}</span>
-                                            <span className="signin-role">{member.relation || member.role}</span>
-                                        </button>
-                                    ))}
+                                    {family.length > 0 ? (
+                                        family.map(member => (
+                                            <button 
+                                                key={member.id}
+                                                className="signin-option signin-family"
+                                                onClick={() => handleSignIn(member)}
+                                            >
+                                                <span className="signin-avatar">{member.avatar}</span>
+                                                <span className="signin-name">{member.name}</span>
+                                                <span className="signin-role">{member.relation || member.role}</span>
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <p className="signin-empty">No family accounts yet. Create one to connect with your elder!</p>
+                                    )}
                                 </>
                             )}
                             
@@ -213,6 +233,7 @@ export function SignInModal({ onClose, mode = 'all' }) {
 export function UserBadge({ showName = true }) {
     const { currentUser, signOut } = useAuth()
     const [showMenu, setShowMenu] = useState(false)
+    const [showSwitchModal, setShowSwitchModal] = useState(false)
     const menuRef = useRef(null)
     const navigate = useNavigate()
 
@@ -230,8 +251,6 @@ export function UserBadge({ showName = true }) {
     }, [showMenu])
 
     if (!currentUser) return null
-
-    const [showSwitchModal, setShowSwitchModal] = useState(false)
 
     const handleSignOut = () => {
         setShowMenu(false)

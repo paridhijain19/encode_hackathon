@@ -13,7 +13,7 @@ function LandingPage() {
     // Determine where to link based on auth status
     const getStartLink = () => {
         if (!isSignedIn) return null // Will show sign-in modal
-        if (currentUser?.role === 'parent') return '/parent'
+        if (currentUser?.role === 'parent') return '/app'
         return '/family'
     }
 
@@ -49,7 +49,7 @@ function LandingPage() {
                         {isSignedIn ? (
                             <>
                                 <Link 
-                                    to={currentUser?.role === 'parent' ? '/parent' : '/family'} 
+                                    to={currentUser?.role === 'parent' ? '/app' : '/family'} 
                                     className="btn btn-outline"
                                 >
                                     My Dashboard
@@ -92,7 +92,7 @@ function LandingPage() {
                         </p>
                         <div className="hero-cta">
                             {isSignedIn ? (
-                                <Link to={currentUser?.role === 'parent' ? '/parent' : '/family'} className="btn btn-primary btn-lg">
+                                <Link to={currentUser?.role === 'parent' ? '/app' : '/family'} className="btn btn-primary btn-lg">
                                     <span>🌱</span> Go to Dashboard
                                 </Link>
                             ) : (
@@ -294,7 +294,7 @@ function LandingPage() {
                     <p>Join thousands of people who are living better, more connected lives with Amble</p>
                     <div className="cta-buttons">
                         {isSignedIn ? (
-                            <Link to={currentUser?.role === 'parent' ? '/parent' : '/family'} className="btn btn-white btn-lg">
+                            <Link to={currentUser?.role === 'parent' ? '/app' : '/family'} className="btn btn-white btn-lg">
                                 Go to Dashboard
                             </Link>
                         ) : (

@@ -7,7 +7,6 @@ import Chat from './pages/Chat'
 import QuickAdd from './pages/QuickAdd'
 import Messages from './pages/Messages'
 import LandingPage from './pages/LandingPage'
-import ParentPortal from './pages/ParentPortal'
 import FamilyDashboard from './pages/FamilyDashboard'
 import UserDashboard from './pages/UserDashboard'
 import Onboarding, { InviteAccept } from './pages/Onboarding'
@@ -56,7 +55,7 @@ function RequireAuth({ children, requiredRole }) {
   if (requiredRole && currentUser?.role !== requiredRole) {
     // Redirect to the correct portal based on role
     if (currentUser?.role === 'parent') {
-      return <Navigate to="/parent" replace />
+      return <Navigate to="/app" replace />
     }
     return <Navigate to="/family" replace />
   }
@@ -82,7 +81,6 @@ function App() {
         <Route path="/app/quick-add" element={<QuickAdd />} />
         <Route path="/app/messages" element={<Messages />} />
         <Route path="/app/settings" element={<Settings />} />
-        <Route path="/parent/*" element={<ParentPortal />} />
         <Route path="/dashboard/*" element={<UserDashboard />} />
 
         {/* Family routes */}

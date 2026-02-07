@@ -96,14 +96,31 @@ def initialize_user_context(callback_context: CallbackContext):
     """
     from agent.supabase_store import get_profile, save_profile
     
-    # Check if user context is already initialized (cross-session persistence)
-    if callback_context.state.get("user:initialized"):
-        # User already exists, just update current time
+    # Get user_id from the invocation context (this is the actual user_id from the API call)
+    # The session object contains the user_id that was used to create/retrieve it
+    try:
+        session = callback_context._invocation_context.session
+        user_id = session.user_id if hasattr(session, 'user_id') else None
+    except Exception:
+        user_id = None
+    
+    # Fallback to state if session doesn't have user_id
+    if not user_id:
+        user_id = callback_context.state.get("user_id", "parent_user")
+    
+    print(f"[AGENT] initialize_user_context called for user_id: {user_id}")
+    
+    # Check if user context is already initialized for THIS user
+    # If user_id changed, we need to reinitialize
+    stored_user_id = callback_context.state.get("user:id")
+    if callback_context.state.get("user:initialized") and stored_user_id == user_id:
+        # Same user already initialized, just update current time
         callback_context.state["current_time"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         return
     
-    # Get user_id from context (default to parent_user)
-    user_id = callback_context.state.get("user_id", "parent_user")
+    # Log when user changes
+    if stored_user_id and stored_user_id != user_id:
+        print(f"[AGENT] User changed from {stored_user_id} to {user_id}, reloading profile...")
     
     # Try loading from Supabase first
     profile = get_profile(user_id)
@@ -150,8 +167,9 @@ def initialize_user_context(callback_context: CallbackContext):
             "interests": ["reading", "walking", "family time"]
         }
     
-    # Mark as initialized to avoid reloading on subsequent turns
+    # Mark as initialized and store user_id to detect changes
     callback_context.state["user:initialized"] = True
+    callback_context.state["user:id"] = user_id
     callback_context.state["current_time"] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
 

@@ -113,6 +113,13 @@ export default function Chat() {
 
     // Show sign-in if not authenticated
     const needsSignIn = !authLoading && !isSignedIn
+    
+    // Use current user's name first, then fetch from API
+    useEffect(() => {
+        if (currentUser?.name) {
+            setUserName(currentUser.name)
+        }
+    }, [currentUser])
 
     // Load memory hints on mount (for welcome screen)
     useEffect(() => {
@@ -121,7 +128,8 @@ export default function Chat() {
                 const state = await getState(userId)
                 const hints = []
 
-                if (state.user_profile?.name) {
+                // Update username from profile if available
+                if (state.user_profile?.name && !currentUser?.name) {
                     setUserName(state.user_profile.name)
                 }
 
@@ -182,6 +190,14 @@ export default function Chat() {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [agent.messages])
+
+    // Cleanup voice and TTS when component unmounts (navigation away)
+    useEffect(() => {
+        return () => {
+            voice.stopListening()
+            tts.stop()
+        }
+    }, [voice, tts])
 
     // Auto-send when voice transcript is ready
     useEffect(() => {
@@ -267,7 +283,7 @@ export default function Chat() {
                     <Link to="/" className="nav-link back-link">
                         <ArrowLeft size={24} />
                     </Link>
-                    <Link to="/parent" className="nav-link">
+                    <Link to="/dashboard" className="nav-link">
                         <Grid3X3 size={24} />
                         <span className="nav-label">Dashboard</span>
                     </Link>

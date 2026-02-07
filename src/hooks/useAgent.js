@@ -5,18 +5,38 @@
  * Manages conversation state, session persistence, and API calls.
  */
 
-import { useState, useCallback, useEffect } from 'react'
-import { sendMessage, getSession, saveSession, getUserId } from '../services/api'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { sendMessage, getSession, saveSession, clearSession, getUserId } from '../services/api'
 
 export function useAgent(overrideUserId = null) {
     const [messages, setMessages] = useState([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
-    const [sessionId, setSessionId] = useState(() => getSession())
+    const [sessionId, setSessionId] = useState(null)
     const [memoriesUsed, setMemoriesUsed] = useState(0)
 
     // Use override if provided, otherwise fall back to localStorage
     const userId = overrideUserId || getUserId()
+    
+    // Track the previous user to detect changes
+    const prevUserIdRef = useRef(userId)
+
+    // Reset messages and session when user changes
+    useEffect(() => {
+        console.log('[useAgent] User changed to:', userId, 'from:', prevUserIdRef.current)
+        
+        // If user actually changed (not just initial mount), clear the old session
+        if (prevUserIdRef.current !== userId) {
+            console.log('[useAgent] Clearing session for user change')
+            clearSession()
+            setSessionId(null)
+        }
+        
+        prevUserIdRef.current = userId
+        setMessages([])
+        setError(null)
+        setMemoriesUsed(0)
+    }, [userId])
 
     /**
      * Send a message to the agent and get response

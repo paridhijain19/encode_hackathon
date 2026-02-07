@@ -74,13 +74,31 @@ export function useVoiceInput() {
 
         recognitionRef.current = recognition
 
-        // Cleanup
+        // Cleanup on unmount
         return () => {
             if (recognitionRef.current) {
-                recognitionRef.current.abort()
+                try {
+                    recognitionRef.current.abort()
+                    recognitionRef.current = null
+                } catch (err) {
+                    console.warn('Error aborting speech recognition:', err)
+                }
             }
         }
     }, [])
+
+    // Additional cleanup effect for when component unmounts during active listening
+    useEffect(() => {
+        return () => {
+            if (isListening && recognitionRef.current) {
+                try {
+                    recognitionRef.current.stop()
+                } catch (err) {
+                    console.warn('Error stopping speech recognition on cleanup:', err)
+                }
+            }
+        }
+    }, [isListening])
 
     const startListening = useCallback(() => {
         if (!recognitionRef.current) {

@@ -131,8 +131,8 @@ export default function Onboarding() {
         setIsLoading(false)
 
         if (success) {
-            // Navigate to parent portal
-            navigate('/parent')
+            // Navigate to chat app
+            navigate('/app')
         }
     }
 
@@ -220,6 +220,13 @@ function ProfileStep({ formData, updateFormData, onNext, onBack }) {
     const [errors, setErrors] = useState({})
     const [activeField, setActiveField] = useState(null) // 'name' or 'location'
     const voice = useVoiceInput()
+
+    // Cleanup voice input when component unmounts
+    useEffect(() => {
+        return () => {
+            voice.stopListening()
+        }
+    }, [voice])
 
     // Handle voice transcript
     useEffect(() => {
