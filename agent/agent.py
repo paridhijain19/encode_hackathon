@@ -18,12 +18,16 @@ from agent.tools import (
     # Expense tracking
     track_expense,
     get_expense_summary,
+    analyze_spending_patterns,  # FIXED: Added unused tool
     # Mood tracking
     track_mood,
     get_mood_history,
+    get_mood_based_suggestions,  # FIXED: Added unused tool
     # Activity tracking
     record_activity,
     get_activity_history,
+    suggest_daily_activity,  # FIXED: Added unused tool
+    search_local_activities,  # FIXED: Added unused tool
     # Appointments
     schedule_appointment,
     get_upcoming_appointments,
@@ -182,9 +186,20 @@ OPIK_CALLBACKS = {
 }
 
 # ==================== SUB-AGENTS ====================
-# NOTE: Sub-agents are commented out to avoid ADK automatic function calling issues
-# The root_agent now handles all tools directly (flattened architecture)
-# This prevents the "Tool use with function calling is unsupported" error
+# ⚠️ ARCHITECTURE DECISION: Flattened Agent Architecture
+# 
+# Sub-agents are intentionally commented out due to Google ADK limitations:
+# - ADK cannot mix custom function tools with built-in Google tools (like google_search)
+# - Error: "Tool use with function calling is unsupported"
+# 
+# SOLUTION: Use a single root_agent with all tools directly attached
+# - Benefit: All tools work together seamlessly
+# - Trade-off: Less modular, but more reliable
+# 
+# If you need to re-enable sub-agents in the future:
+# 1. Ensure no sub-agent mixes custom tools with Google Search
+# 2. Use AgentTool wrapper for any agent using Google Search (see search_agent example)
+# 3. Test thoroughly with ADK's function calling behavior
 
 # # Mood & Emotional Wellness Agent
 # mood_agent = LlmAgent(
@@ -331,12 +346,16 @@ root_agent = Agent(
         # Expense tracking
         track_expense,
         get_expense_summary,
+        analyze_spending_patterns,  # FIXED: Now accessible to agent
         # Mood tracking
         track_mood,
         get_mood_history,
+        get_mood_based_suggestions,  # FIXED: Now accessible to agent
         # Activity tracking
         record_activity,
         get_activity_history,
+        suggest_daily_activity,  # FIXED: Now accessible to agent
+        search_local_activities,  # FIXED: Now accessible to agent
         # Appointments
         schedule_appointment,
         get_upcoming_appointments,
@@ -344,6 +363,7 @@ root_agent = Agent(
         # Wellness
         analyze_wellness_patterns,
         send_family_alert,
+        get_family_alerts_history,  # FIXED: Now accessible to agent
         # Suggestions and summary
         get_activity_suggestions,
         get_daily_summary,

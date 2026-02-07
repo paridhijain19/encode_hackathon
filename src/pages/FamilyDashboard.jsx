@@ -283,7 +283,7 @@ function FamilyDashboard() {
             {needsSignIn && (
                 <SignInModal 
                     mode="family" 
-                    onClose={() => {}} // Can't close without signing in
+                    onClose={null}
                 />
             )}
 

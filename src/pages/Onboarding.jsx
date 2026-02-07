@@ -16,6 +16,7 @@ import {
     Sparkles, Check, Plus, X, Mail, Send, Loader, Mic, MicOff
 } from 'lucide-react'
 import { useVoiceInput } from '../hooks/useVoiceInput'
+import { useAuth } from '../context/AuthContext'
 import './Onboarding.css'
 
 // API helper
@@ -61,6 +62,7 @@ async function sendFamilyInvite(elderUserId, familyMember) {
 export default function Onboarding() {
     const navigate = useNavigate()
     const [searchParams] = useSearchParams()
+    const { currentUser, signInAsParent, isSignedIn } = useAuth()
     const [currentStep, setCurrentStep] = useState(0)
     const [isLoading, setIsLoading] = useState(false)
 
@@ -109,20 +111,27 @@ export default function Onboarding() {
     const handleComplete = async () => {
         setIsLoading(true)
 
+        // Sign in as parent if not already signed in
+        if (!isSignedIn) {
+            signInAsParent()
+        }
+
+        const userId = currentUser?.id || 'parent_user'
+
         // Save profile data
-        const success = await saveOnboardingData(formData)
+        const success = await saveOnboardingData({ ...formData, user_id: userId })
 
         // Send family invites
         for (const member of formData.familyMembers) {
             if (member.email) {
-                await sendFamilyInvite('default_user', member)
+                await sendFamilyInvite(userId, member)
             }
         }
 
         setIsLoading(false)
 
         if (success) {
-            // Navigate to main app
+            // Navigate to parent portal
             navigate('/parent')
         }
     }

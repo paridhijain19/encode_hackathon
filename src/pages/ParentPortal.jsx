@@ -85,7 +85,7 @@ function ParentPortal() {
             {needsSignIn && (
                 <SignInModal 
                     mode="parent" 
-                    onClose={() => {}} // Can't close without signing in
+                    onClose={null} 
                 />
             )}
 

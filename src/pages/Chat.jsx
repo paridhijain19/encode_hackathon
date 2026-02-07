@@ -13,6 +13,7 @@ import { useTextToSpeech } from '../hooks/useTextToSpeech'
 import { useNotifications } from '../hooks/useNotifications'
 import { useAuth } from '../context/AuthContext'
 import { getState } from '../services/api'
+import { UserBadge, SignInModal } from '../components/SignIn'
 import NotificationBanner from '../components/NotificationBanner'
 import './Chat.css'
 
@@ -93,7 +94,7 @@ function TypingIndicator() {
 }
 
 export default function Chat() {
-    const { currentUser } = useAuth()
+    const { currentUser, isSignedIn, isLoading: authLoading } = useAuth()
     const userId = currentUser?.id || 'default_user'
     const agent = useAgent(userId)
     const voice = useVoiceInput()
@@ -104,10 +105,14 @@ export default function Chat() {
     const [currentHint, setCurrentHint] = useState('')
     const [allHints, setAllHints] = useState([])
     const [userName, setUserName] = useState('')
+    const [showSignIn, setShowSignIn] = useState(false)
     const messagesEndRef = useRef(null)
     const inputRef = useRef(null)
     const lastMessageCountRef = useRef(0)
     const hintIndexRef = useRef(0)
+
+    // Show sign-in if not authenticated
+    const needsSignIn = !authLoading && !isSignedIn
 
     // Load memory hints on mount (for welcome screen)
     useEffect(() => {
@@ -230,6 +235,14 @@ export default function Chat() {
 
     return (
         <div className="chat-page">
+            {/* Sign-in modal if not authenticated */}
+            {(needsSignIn || showSignIn) && (
+                <SignInModal 
+                    mode="all" 
+                    onClose={isSignedIn ? () => setShowSignIn(false) : undefined}
+                />
+            )}
+
             {/* Proactive Notifications */}
             <NotificationBanner
                 notifications={notifications.notifications}
@@ -254,7 +267,7 @@ export default function Chat() {
                     <Link to="/" className="nav-link back-link">
                         <ArrowLeft size={24} />
                     </Link>
-                    <Link to="/dashboard" className="nav-link">
+                    <Link to="/parent" className="nav-link">
                         <Grid3X3 size={24} />
                         <span className="nav-label">Dashboard</span>
                     </Link>
@@ -275,6 +288,11 @@ export default function Chat() {
                         <span className="nav-label">Settings</span>
                     </Link>
                 </nav>
+
+                {/* User badge at bottom of sidebar */}
+                <div className="sidebar-user">
+                    <UserBadge />
+                </div>
             </aside>
 
             {/* Main Chat Area */}

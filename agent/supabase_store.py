@@ -62,20 +62,107 @@ def _get_client():
 
 # ==================== USER MANAGEMENT ====================
 
+AVATAR_OPTIONS = {
+    'parent': ['👵', '👴', '👵🏽', '👴🏽', '👵🏿', '👴🏿'],
+    'family': ['👩', '👨', '👧', '👦', '👩🏽', '👨🏽']
+}
+
+def _pick_avatar(role: str, index: int = 0) -> str:
+    """Pick an avatar based on role and index."""
+    options = AVATAR_OPTIONS.get(role, AVATAR_OPTIONS['family'])
+    return options[index % len(options)]
+
+
+def register_user(user_id: str, name: str, role: str = "elder", avatar: str = None, relation: str = None) -> Dict[str, Any]:
+    """
+    Register a new user in the user_profiles table.
+    Returns the created user dict.
+    """
+    client = _get_client()
+    
+    if not avatar:
+        avatar = _pick_avatar('parent' if role in ('parent', 'elder') else 'family')
+    
+    # Normalize role
+    db_role = 'parent' if role in ('parent', 'elder') else role
+    
+    profile_data = {
+        "user_id": user_id,
+        "name": name,
+        "preferences": {
+            "role": db_role,
+            "avatar": avatar,
+            "relation": relation,
+        },
+    }
+    
+    try:
+        client.table("user_profiles").upsert(
+            profile_data, on_conflict="user_id"
+        ).execute()
+        
+        return {
+            "id": user_id,
+            "name": name,
+            "role": db_role,
+            "avatar": avatar,
+            "relation": relation,
+        }
+    except Exception as e:
+        print(f"[WARN] Failed to register user: {e}")
+        return {"id": user_id, "name": name, "role": db_role, "avatar": avatar}
+
+
+def list_users(role: str = None) -> List[Dict[str, Any]]:
+    """
+    List all registered users from user_profiles table.
+    Optionally filter by role (stored in preferences->role).
+    """
+    client = _get_client()
+    
+    try:
+        result = client.table("user_profiles").select("*").order("created_at").execute()
+        
+        users = []
+        for row in (result.data or []):
+            prefs = row.get("preferences") or {}
+            user_role = prefs.get("role", "parent")
+            
+            if role and user_role != role:
+                continue
+            
+            users.append({
+                "id": row["user_id"],
+                "name": row.get("name") or row["user_id"],
+                "role": user_role,
+                "avatar": prefs.get("avatar", "👤"),
+                "relation": prefs.get("relation"),
+                "location": row.get("location"),
+            })
+        
+        return users
+    except Exception as e:
+        print(f"[WARN] Failed to list users: {e}")
+        return []
+
+
 def get_or_create_user(user_id: str, name: str = None, role: str = "elder") -> Dict[str, Any]:
     """
     Get existing user or create new one.
     Uses user_id as the unique identifier (e.g., 'parent_user', 'family_sarah').
-    
-    NOTE: The users table from Supabase uses UUID, but we use TEXT user_id.
-    We use the user_profiles table instead for our app's user data.
     """
-    # Return a simple user dict - actual persistence is through profiles table
-    return {
-        "id": user_id,
-        "name": name or user_id,
-        "role": role
-    }
+    profile = get_profile(user_id)
+    if profile:
+        prefs = profile.get("preferences") or {}
+        return {
+            "id": user_id,
+            "name": profile.get("name") or name or user_id,
+            "role": prefs.get("role", role),
+            "avatar": prefs.get("avatar", "👤"),
+        }
+    
+    # Create new user
+    return register_user(user_id, name or user_id, role)
 
 
 # ==================== SESSION MANAGEMENT ====================

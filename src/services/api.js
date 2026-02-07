@@ -156,11 +156,11 @@ export function saveUserId(userId) {
 }
 
 /**
- * Get user ID from localStorage (defaults to 'default_user')
- * @returns {string}
+ * Get user ID from localStorage (returns null if not set)
+ * @returns {string|null}
  */
 export function getUserId() {
-    return localStorage.getItem(USER_KEY) || 'default_user'
+    return localStorage.getItem(USER_KEY) || null
 }
 
 
@@ -278,5 +278,52 @@ export async function getRecentData(userId) {
             appointments: [],
             moods: [],
         }
+    }
+}
+
+// ==================== USER MANAGEMENT ====================
+
+/**
+ * List all registered users from the database
+ * @param {string} role - Optional filter: 'parent' or 'family'
+ * @returns {Promise<Array<{id: string, name: string, role: string, avatar: string}>>}
+ */
+export async function listUsers(role = null) {
+    try {
+        const url = role
+            ? `${API_BASE}/api/users?role=${encodeURIComponent(role)}`
+            : `${API_BASE}/api/users`
+        const response = await fetch(url)
+        if (!response.ok) {
+            return []
+        }
+        const data = await response.json()
+        return data.users || []
+    } catch (error) {
+        console.error('API Error (listUsers):', error)
+        return []
+    }
+}
+
+/**
+ * Register a new user account
+ * @param {{user_id: string, name: string, role: string, avatar?: string, relation?: string}} userData
+ * @returns {Promise<{status: string, user: object}|null>}
+ */
+export async function registerUser(userData) {
+    try {
+        const response = await fetch(`${API_BASE}/api/users`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData),
+        })
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}))
+            throw new Error(error.detail || `HTTP ${response.status}`)
+        }
+        return await response.json()
+    } catch (error) {
+        console.error('API Error (registerUser):', error)
+        return null
     }
 }

@@ -123,7 +123,9 @@ from agent.supabase_store import (
     get_moods as db_get_moods,
     get_alerts as db_get_alerts,
     get_family_summary as db_get_family_summary,
-    get_wellness_data as db_get_wellness_data
+    get_wellness_data as db_get_wellness_data,
+    list_users as db_list_users,
+    register_user as db_register_user
 )
 
 # Simple rate limiter for Google API (to avoid 429 errors)
@@ -265,9 +267,26 @@ async def lifespan(app: FastAPI):
     )
     print("[OK] Amble agent runner initialized")
     
+    # FIXED: Start proactive scheduler for reminders and check-ins
+    try:
+        from agent.scheduler import start_scheduler
+        start_scheduler()
+        print("[OK] Proactive scheduler started")
+    except Exception as e:
+        print(f"[WARN] Failed to start scheduler: {e}")
+        print("[WARN] Proactive features (reminders, check-ins) will not work")
+    
     yield
     
     # Shutdown
+    try:
+        # Stop scheduler
+        from agent.scheduler import stop_scheduler
+        stop_scheduler()
+        print("[OK] Scheduler stopped")
+    except Exception as e:
+        print(f"[WARN] Failed to stop scheduler: {e}")
+    
     try:
         opik_tracer.flush()
         print("[OK] Opik traces flushed")
@@ -401,6 +420,52 @@ async def run_agent(user_id: str, session_id: str, message: str, memory_context:
 async def health():
     """Health check endpoint."""
     return {"status": "ok", "agent": "amble"}
+
+
+# ==================== USER MANAGEMENT ENDPOINTS ====================
+
+class RegisterUserRequest(BaseModel):
+    user_id: str
+    name: str
+    role: str = "parent"  # 'parent' or family role like 'daughter', 'son'
+    avatar: str = None
+    relation: str = None  # For family members: 'daughter', 'son', etc.
+
+
+@app.get("/api/users")
+async def list_users(role: str = None):
+    """
+    List all registered users from the database.
+    Optional filter by role: 'parent' or 'family'.
+    """
+    try:
+        if role == 'family':
+            # Get all non-parent users
+            all_users = db_list_users()
+            users = [u for u in all_users if u.get('role') != 'parent']
+        elif role == 'parent':
+            users = db_list_users(role='parent')
+        else:
+            users = db_list_users()
+        return {"users": users}
+    except Exception as e:
+        return {"users": [], "error": str(e)}
+
+
+@app.post("/api/users")
+async def register_user(request: RegisterUserRequest):
+    """Register a new user account."""
+    try:
+        user = db_register_user(
+            user_id=request.user_id,
+            name=request.name,
+            role=request.role,
+            avatar=request.avatar,
+            relation=request.relation,
+        )
+        return {"status": "success", "user": user}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/state", response_model=StateResponse)
@@ -563,6 +628,7 @@ class OnboardingData(PydanticBase):
     location: str = ""
     interests: List[str] = []
     familyMembers: List[dict] = []
+    user_id: str = "parent_user"
 
 class InviteRequest(PydanticBase):
     elder_user_id: str
@@ -581,6 +647,8 @@ async def save_onboarding(data: OnboardingData):
     try:
         from datetime import datetime
         
+        user_id = data.user_id or "parent_user"
+        
         # Build profile dict for save_profile(user_id, profile_dict)
         profile_data = {
             "name": data.name,
@@ -591,10 +659,11 @@ async def save_onboarding(data: OnboardingData):
             "onboarded_at": datetime.now().isoformat()
         }
         
-        db_save_profile("parent_user", profile_data)
+        # Also register this user with role=parent
+        db_register_user(user_id, data.name, role="parent")
+        
+        db_save_profile(user_id, profile_data)
         return {"status": "success", "message": "Profile saved to Supabase"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

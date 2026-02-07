@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import './UserDashboard.css'
 import { useAuth } from '../context/AuthContext'
+import { UserBadge, SignInModal } from '../components/SignIn'
 import { getState } from '../services/api'
 
 // Helper functions
@@ -48,11 +49,21 @@ function formatTime(isoString) {
 
 // Main Dashboard Component
 export default function UserDashboard() {
-    const { currentUser } = useAuth()
+    const { currentUser, isSignedIn, isLoading: authLoading } = useAuth()
     const location = useLocation()
-    const userId = currentUser?.id || 'default_user'
+    const userId = currentUser?.id || null
     const [userData, setUserData] = useState(null)
     const [isLoading, setIsLoading] = useState(true)
+    const [showSignIn, setShowSignIn] = useState(false)
+
+    // Show sign-in gate if not authenticated
+    useEffect(() => {
+        if (!authLoading && !isSignedIn) {
+            setShowSignIn(true)
+        } else {
+            setShowSignIn(false)
+        }
+    }, [authLoading, isSignedIn])
 
     // Determine back navigation path
     const getBackPath = () => {
@@ -64,6 +75,10 @@ export default function UserDashboard() {
 
     // Load user data
     useEffect(() => {
+        if (!userId) {
+            setIsLoading(false)
+            return
+        }
         async function loadUserData() {
             try {
                 setIsLoading(true)
@@ -98,6 +113,9 @@ export default function UserDashboard() {
 
     return (
         <div className="user-dashboard">
+            {/* Sign-in gate */}
+            {showSignIn && <SignInModal mode="all" onClose={null} />}
+
             {/* Sidebar */}
             <aside className="dashboard-sidebar">
                 <div className="sidebar-header">
@@ -124,14 +142,7 @@ export default function UserDashboard() {
                 </nav>
 
                 <div className="sidebar-user">
-                    <div className="user-avatar">
-                        <User size={24} />
-                    </div>
-                    <div className="user-info">
-                        <h4>{userName}</h4>
-                        <p>📍 {userLocation}</p>
-                        <span className="status online">● Active</span>
-                    </div>
+                    <UserBadge showName={true} />
                 </div>
 
                 <div className="sidebar-footer">

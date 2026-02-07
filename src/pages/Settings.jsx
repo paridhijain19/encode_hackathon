@@ -70,8 +70,9 @@ export default function Settings() {
             const response = await fetch(`${API_BASE}/api/settings/${currentUser.id}`)
             if (response.ok) {
                 const data = await response.json()
-                if (data.settings) {
-                    setSettings(prev => ({ ...prev, ...data.settings }))
+                // Backend returns the settings object directly
+                if (data) {
+                    setSettings(prev => ({ ...prev, ...data }))
                 }
             }
         } catch (error) {
@@ -85,9 +86,9 @@ export default function Settings() {
         setIsSaving(true)
         try {
             const response = await fetch(`${API_BASE}/api/settings/${currentUser.id}`, {
-                method: 'POST',
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ settings })
+                body: JSON.stringify(settings)
             })
             
             if (response.ok) {
@@ -108,7 +109,13 @@ export default function Settings() {
         { id: 'medications', icon: Heart, label: 'Medications' },
         { id: 'emergency', icon: Phone, label: 'Emergency Contacts' },
         { id: 'privacy', icon: Shield, label: 'Privacy' },
+        { id: 'account', icon: Users, label: 'Account' },
     ]
+
+    const handleSignOut = () => {
+        signOut()
+        navigate('/')
+    }
 
     return (
         <div className="settings-page">
@@ -175,6 +182,40 @@ export default function Settings() {
                             settings={settings.privacy}
                             onChange={(privacy) => setSettings(prev => ({ ...prev, privacy: privacy }))}
                         />
+                    )}
+                    {activeSection === 'account' && (
+                        <div className="settings-section">
+                            <h2>Account</h2>
+                            {currentUser && (
+                                <div style={{ 
+                                    display: 'flex', alignItems: 'center', gap: '16px',
+                                    padding: '20px', background: '#FAF9F7', borderRadius: '12px',
+                                    marginBottom: '24px'
+                                }}>
+                                    <span style={{ fontSize: '2.5rem' }}>{currentUser.avatar}</span>
+                                    <div>
+                                        <h3 style={{ margin: '0 0 4px' }}>{currentUser.name}</h3>
+                                        <p style={{ margin: 0, color: '#7A7267', fontSize: '0.9rem', textTransform: 'capitalize' }}>
+                                            {currentUser.role}
+                                        </p>
+                                        <p style={{ margin: '2px 0 0', color: '#A8A093', fontSize: '0.8rem' }}>
+                                            ID: {currentUser.id}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                            <button
+                                onClick={handleSignOut}
+                                style={{
+                                    width: '100%', padding: '14px 24px', background: '#C17F59',
+                                    color: 'white', border: 'none', borderRadius: '12px',
+                                    fontSize: '1rem', fontWeight: '600', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                                }}
+                            >
+                                Sign Out
+                            </button>
+                        </div>
                     )}
                 </main>
             </div>

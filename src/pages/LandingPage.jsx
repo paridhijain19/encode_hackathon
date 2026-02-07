@@ -1,10 +1,38 @@
 import { Link } from 'react-router-dom'
 import { Heart, Activity, Bell, Phone, ArrowRight, Sun, Calendar, Users, Shield, CheckCircle, Clock, Brain, Smile } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import { UserBadge, SignInModal } from '../components/SignIn'
+import { useState } from 'react'
 import './LandingPage.css'
 
 function LandingPage() {
+    const { currentUser, isSignedIn } = useAuth()
+    const [showSignIn, setShowSignIn] = useState(false)
+    const [signInMode, setSignInMode] = useState('parent')
+
+    // Determine where to link based on auth status
+    const getStartLink = () => {
+        if (!isSignedIn) return null // Will show sign-in modal
+        if (currentUser?.role === 'parent') return '/parent'
+        return '/family'
+    }
+
+    const handleStartClick = (mode) => {
+        if (isSignedIn) return // Link will handle it
+        setSignInMode(mode)
+        setShowSignIn(true)
+    }
+
     return (
         <div className="landing-page">
+            {/* Sign-in modal */}
+            {showSignIn && (
+                <SignInModal 
+                    mode={signInMode} 
+                    onClose={() => setShowSignIn(false)} 
+                />
+            )}
+
             {/* Navigation */}
             <nav className="navbar">
                 <div className="container navbar-content">
@@ -18,8 +46,32 @@ function LandingPage() {
                         <a href="#about">About</a>
                     </div>
                     <div className="nav-actions">
-                        <Link to="/app" className="btn btn-outline">Start Chatting</Link>
-                        <Link to="/family" className="btn btn-primary">Family Portal</Link>
+                        {isSignedIn ? (
+                            <>
+                                <Link 
+                                    to={currentUser?.role === 'parent' ? '/parent' : '/family'} 
+                                    className="btn btn-outline"
+                                >
+                                    My Dashboard
+                                </Link>
+                                <UserBadge />
+                            </>
+                        ) : (
+                            <>
+                                <button 
+                                    className="btn btn-outline" 
+                                    onClick={() => handleStartClick('parent')}
+                                >
+                                    I'm a Parent
+                                </button>
+                                <button 
+                                    className="btn btn-primary" 
+                                    onClick={() => handleStartClick('family')}
+                                >
+                                    Family Member
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
             </nav>
@@ -39,12 +91,20 @@ function LandingPage() {
                             not the other way around.
                         </p>
                         <div className="hero-cta">
-                            <Link to="/onboarding" className="btn btn-primary btn-lg">
-                                <span>🌱</span> Get Started
-                            </Link>
-                            <Link to="/family" className="btn btn-secondary btn-lg">
-                                <span>👨‍👩‍👧</span> For Family
-                            </Link>
+                            {isSignedIn ? (
+                                <Link to={currentUser?.role === 'parent' ? '/parent' : '/family'} className="btn btn-primary btn-lg">
+                                    <span>🌱</span> Go to Dashboard
+                                </Link>
+                            ) : (
+                                <>
+                                    <button className="btn btn-primary btn-lg" onClick={() => handleStartClick('parent')}>
+                                        <span>🌱</span> Get Started
+                                    </button>
+                                    <button className="btn btn-secondary btn-lg" onClick={() => handleStartClick('family')}>
+                                        <span>👨‍👩‍👧</span> For Family
+                                    </button>
+                                </>
+                            )}
                         </div>
                         <div className="hero-stats">
                             <div className="stat">
@@ -233,8 +293,20 @@ function LandingPage() {
                     <h2>Ready to Start Your Journey?</h2>
                     <p>Join thousands of people who are living better, more connected lives with Amble</p>
                     <div className="cta-buttons">
-                        <Link to="/app" className="btn btn-white btn-lg">Try Amble Free</Link>
-                        <Link to="/family" className="btn btn-outline-white btn-lg">Family Portal</Link>
+                        {isSignedIn ? (
+                            <Link to={currentUser?.role === 'parent' ? '/parent' : '/family'} className="btn btn-white btn-lg">
+                                Go to Dashboard
+                            </Link>
+                        ) : (
+                            <>
+                                <button className="btn btn-white btn-lg" onClick={() => handleStartClick('parent')}>
+                                    Try Amble Free
+                                </button>
+                                <button className="btn btn-outline-white btn-lg" onClick={() => handleStartClick('family')}>
+                                    Family Portal
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
             </section>
