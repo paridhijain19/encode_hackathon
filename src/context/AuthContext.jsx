@@ -71,8 +71,13 @@ export function AuthProvider({ children }) {
             const allUsers = await listUsers()
             console.log('[AuthContext] API returned:', allUsers)
             if (allUsers && allUsers.length > 0) {
-                const parents = allUsers.filter(u => u.role === 'parent')
-                const family = allUsers.filter(u => u.role !== 'parent')
+                // Deduplicate users by id
+                const uniqueUsers = allUsers.filter((user, index, self) => 
+                    index === self.findIndex(u => u.id === user.id)
+                )
+                
+                const parents = uniqueUsers.filter(u => u.role === 'parent')
+                const family = uniqueUsers.filter(u => u.role !== 'parent')
                 console.log('[AuthContext] Parents:', parents, 'Family:', family)
                 
                 const result = {

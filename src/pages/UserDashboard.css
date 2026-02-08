@@ -437,10 +437,9 @@
     transform: translateY(-1px);
 }
 
-/* View Container (for placeholder views) */
+/* View Container (for detailed views) */
 .view-container {
     padding: 40px;
-    text-align: center;
 }
 
 .view-container h1 {
@@ -453,6 +452,229 @@
     margin: 0;
     color: var(--text-secondary);
     font-size: 1.1rem;
+}
+
+/* Count Badge */
+.count-badge {
+    padding: 4px 12px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border-radius: 12px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* Detailed Item Styles */
+.activity-item.detailed,
+.expense-item.detailed,
+.mood-item,
+.appointment-item.detailed,
+.family-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.activity-item.detailed:last-child,
+.expense-item.detailed:last-child,
+.mood-item:last-child,
+.appointment-item.detailed:last-child,
+.family-item:last-child {
+    border-bottom: none;
+}
+
+.activity-item.detailed .activity-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.activity-meta {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.activity-notes,
+.expense-description,
+.mood-notes {
+    grid-column: 1 / -1;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    margin-top: 8px;
+}
+
+/* Category Breakdown */
+.category-breakdown {
+    padding: 16px;
+}
+
+.category-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.category-item:last-child {
+    border-bottom: none;
+}
+
+.category-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    text-transform: capitalize;
+}
+
+.category-amount {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+/* Mood List Styles */
+.mood-list {
+    padding: 16px;
+}
+
+.mood-item {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+}
+
+.mood-emoji-large {
+    font-size: 2.5rem;
+}
+
+.mood-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mood-rating {
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: capitalize;
+}
+
+.mood-time {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.mood-energy {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* Expense Item Detailed */
+.expense-item.detailed {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+}
+
+.expense-item.detailed .expense-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.expense-item.detailed .expense-category {
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.expense-item.detailed .expense-time {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.expense-item.detailed .expense-amount {
+    font-weight: 700;
+    font-size: 1.125rem;
+    color: var(--primary);
+}
+
+/* Family List Styles */
+.family-list {
+    padding: 16px;
+}
+
+.family-item {
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+}
+
+.family-avatar {
+    font-size: 2rem;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border-radius: 50%;
+}
+
+.family-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.family-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.family-relation {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.family-action {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    text-decoration: none;
+    transition: all var(--transition);
+}
+
+.family-action:hover {
+    background: var(--primary-dark);
+    transform: scale(1.1);
+}
+
+/* Appointment Item Detailed */
+.appointment-item.detailed {
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+}
+
+.appointment-item.detailed .appointment-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.appointment-location {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* Empty State in Views */
+.dashboard-card .empty-state {
+    min-height: 200px;
 }
 
 /* Responsive */

@@ -365,39 +365,399 @@ function DashboardHome({ userData, isLoading }) {
     )
 }
 
-// Placeholder components for other views
+// Activity View Component
 function ActivityView({ userData }) {
+    const activities = userData?.activities || []
+    const todayActivities = activities.filter(activity => {
+        const activityDate = new Date(activity.timestamp).toDateString()
+        const today = new Date().toDateString()
+        return activityDate === today
+    })
+    const weekActivities = activities.filter(activity => {
+        const activityDate = new Date(activity.timestamp)
+        const weekAgo = new Date()
+        weekAgo.setDate(weekAgo.getDate() - 7)
+        return activityDate >= weekAgo
+    })
+
+    const totalDuration = weekActivities.reduce((sum, a) => sum + (a.duration_minutes || 0), 0)
+
     return (
         <div className="view-container">
-            <h1>Activities</h1>
-            <p>Your activity history and tracking</p>
+            <div className="page-header">
+                <div>
+                    <h1>Activities & Exercise</h1>
+                    <p>Track your daily movements and activities</p>
+                </div>
+            </div>
+
+            <div className="status-cards">
+                <div className="status-card">
+                    <div className="card-icon activity">
+                        <Activity size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>{todayActivities.length}</h3>
+                        <p>Today's Activities</p>
+                    </div>
+                </div>
+                <div className="status-card">
+                    <div className="card-icon">
+                        <Clock size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>{totalDuration} min</h3>
+                        <p>This Week</p>
+                    </div>
+                </div>
+                <div className="status-card">
+                    <div className="card-icon">
+                        <TrendingUp size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>{weekActivities.length}</h3>
+                        <p>Weekly Count</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="dashboard-card">
+                <div className="card-header">
+                    <h3>All Activities</h3>
+                    <span className="count-badge">{activities.length} total</span>
+                </div>
+                <div className="activity-list">
+                    {activities.length > 0 ? activities.map((activity, index) => (
+                        <div key={index} className="activity-item detailed">
+                            <span className="activity-icon">
+                                {getActivityIcon(activity.activity_type)}
+                            </span>
+                            <div className="activity-info">
+                                <span className="activity-name">
+                                    {activity.activity_name || activity.activity_type}
+                                </span>
+                                <span className="activity-meta">
+                                    {formatTime(activity.timestamp)}
+                                    {activity.duration_minutes && ` • ${activity.duration_minutes} min`}
+                                </span>
+                            </div>
+                            {activity.notes && (
+                                <span className="activity-notes">{activity.notes}</span>
+                            )}
+                        </div>
+                    )) : (
+                        <div className="empty-state">
+                            <Activity size={48} />
+                            <p>No activities recorded yet</p>
+                            <Link to="/app" className="cta-link">Start tracking with Amble</Link>
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     )
 }
 
 function HealthView({ userData }) {
+    const moods = userData?.moods || []
+    const latestMood = moods[0]
+    const weekMoods = moods.filter(mood => {
+        const moodDate = new Date(mood.timestamp)
+        const weekAgo = new Date()
+        weekAgo.setDate(weekAgo.getDate() - 7)
+        return moodDate >= weekAgo
+    })
+
+    const avgEnergy = weekMoods.length > 0 
+        ? (weekMoods.reduce((sum, m) => sum + (m.energy_level || 5), 0) / weekMoods.length).toFixed(1)
+        : '5.0'
+
     return (
         <div className="view-container">
-            <h1>Health & Wellness</h1>
-            <p>Your health metrics and mood tracking</p>
+            <div className="page-header">
+                <div>
+                    <h1>Health & Wellness</h1>
+                    <p>Monitor your mood and wellbeing</p>
+                </div>
+            </div>
+
+            <div className="status-cards">
+                <div className="status-card">
+                    <div className="card-icon mood">
+                        <span className="mood-emoji">
+                            {latestMood ? getMoodEmoji(latestMood.rating) : '🙂'}
+                        </span>
+                    </div>
+                    <div className="card-content">
+                        <h3>{latestMood?.rating || 'Good'}</h3>
+                        <p>Current Mood</p>
+                    </div>
+                </div>
+                <div className="status-card">
+                    <div className="card-icon">
+                        <Heart size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>{avgEnergy}/10</h3>
+                        <p>Avg Energy Level</p>
+                    </div>
+                </div>
+                <div className="status-card">
+                    <div className="card-icon">
+                        <Calendar size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>{weekMoods.length}</h3>
+                        <p>Check-ins This Week</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="dashboard-card">
+                <div className="card-header">
+                    <h3>Mood History</h3>
+                    <span className="count-badge">{moods.length} entries</span>
+                </div>
+                <div className="mood-list">
+                    {moods.length > 0 ? moods.map((mood, index) => (
+                        <div key={index} className="mood-item">
+                            <span className="mood-emoji-large">
+                                {getMoodEmoji(mood.rating)}
+                            </span>
+                            <div className="mood-info">
+                                <span className="mood-rating">{mood.rating}</span>
+                                <span className="mood-time">{formatTime(mood.timestamp)}</span>
+                                <span className="mood-energy">Energy: {mood.energy_level || 5}/10</span>
+                            </div>
+                            {mood.notes && (
+                                <span className="mood-notes">{mood.notes}</span>
+                            )}
+                        </div>
+                    )) : (
+                        <div className="empty-state">
+                            <Heart size={48} />
+                            <p>No mood entries yet</p>
+                            <Link to="/app" className="cta-link">Share how you're feeling</Link>
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     )
 }
 
 function BudgetView({ userData }) {
+    const expenses = userData?.expenses || []
+    const todayExpenses = expenses.filter(expense => {
+        const expenseDate = new Date(expense.timestamp).toDateString()
+        const today = new Date().toDateString()
+        return expenseDate === today
+    })
+    const weekExpenses = expenses.filter(expense => {
+        const expenseDate = new Date(expense.timestamp)
+        const weekAgo = new Date()
+        weekAgo.setDate(weekAgo.getDate() - 7)
+        return expenseDate >= weekAgo
+    })
+
+    const todayTotal = todayExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
+    const weekTotal = weekExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
+    const allTotal = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
+
+    // Category breakdown
+    const categories = {}
+    expenses.forEach(exp => {
+        const cat = exp.category || 'other'
+        categories[cat] = (categories[cat] || 0) + (parseFloat(exp.amount) || 0)
+    })
+
     return (
         <div className="view-container">
-            <h1>Expenses & Budget</h1>
-            <p>Your spending overview and budget tracking</p>
+            <div className="page-header">
+                <div>
+                    <h1>Expenses & Budget</h1>
+                    <p>Track your spending and manage finances</p>
+                </div>
+            </div>
+
+            <div className="status-cards">
+                <div className="status-card">
+                    <div className="card-icon expense">
+                        <Wallet size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>₹{todayTotal.toFixed(0)}</h3>
+                        <p>Today's Spending</p>
+                    </div>
+                </div>
+                <div className="status-card">
+                    <div className="card-icon">
+                        <TrendingUp size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>₹{weekTotal.toFixed(0)}</h3>
+                        <p>This Week</p>
+                    </div>
+                </div>
+                <div className="status-card">
+                    <div className="card-icon">
+                        <Calendar size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>{expenses.length}</h3>
+                        <p>Total Transactions</p>
+                    </div>
+                </div>
+            </div>
+
+            {Object.keys(categories).length > 0 && (
+                <div className="dashboard-card">
+                    <div className="card-header">
+                        <h3>Spending by Category</h3>
+                    </div>
+                    <div className="category-breakdown">
+                        {Object.entries(categories)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([category, amount]) => (
+                                <div key={category} className="category-item">
+                                    <span className="category-name">{category}</span>
+                                    <span className="category-amount">₹{amount.toFixed(0)}</span>
+                                </div>
+                            ))
+                        }
+                    </div>
+                </div>
+            )}
+
+            <div className="dashboard-card">
+                <div className="card-header">
+                    <h3>All Expenses</h3>
+                    <span className="count-badge">₹{allTotal.toFixed(0)} total</span>
+                </div>
+                <div className="expense-list">
+                    {expenses.length > 0 ? expenses.map((expense, index) => (
+                        <div key={index} className="expense-item detailed">
+                            <div className="expense-info">
+                                <span className="expense-category">{expense.category}</span>
+                                <span className="expense-time">{formatTime(expense.timestamp)}</span>
+                            </div>
+                            <span className="expense-amount">₹{parseFloat(expense.amount).toFixed(0)}</span>
+                            {expense.description && (
+                                <span className="expense-description">{expense.description}</span>
+                            )}
+                        </div>
+                    )) : (
+                        <div className="empty-state">
+                            <Wallet size={48} />
+                            <p>No expenses tracked yet</p>
+                            <Link to="/app" className="cta-link">Tell Amble about your spending</Link>
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     )
 }
 
 function FamilyView({ userData }) {
+    const profile = userData?.user_profile || {}
+    const familyMembers = profile.family_members || []
+    const appointments = userData?.appointments || []
+
     return (
         <div className="view-container">
-            <h1>Family & Connections</h1>
-            <p>Stay connected with your loved ones</p>
+            <div className="page-header">
+                <div>
+                    <h1>Family & Connections</h1>
+                    <p>Stay connected with your loved ones</p>
+                </div>
+            </div>
+
+            <div className="status-cards">
+                <div className="status-card">
+                    <div className="card-icon family">
+                        <Phone size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>{familyMembers.length}</h3>
+                        <p>Family Members</p>
+                    </div>
+                </div>
+                <div className="status-card">
+                    <div className="card-icon">
+                        <Calendar size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>{appointments.length}</h3>
+                        <p>Appointments</p>
+                    </div>
+                </div>
+                <div className="status-card">
+                    <div className="card-icon">
+                        <Video size={24} />
+                    </div>
+                    <div className="card-content">
+                        <h3>0</h3>
+                        <p>Scheduled Calls</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="dashboard-card">
+                <div className="card-header">
+                    <h3>Family Members</h3>
+                    <Link to="/family" className="view-all">
+                        Family Portal <ArrowRight size={16} />
+                    </Link>
+                </div>
+                <div className="family-list">
+                    {familyMembers.length > 0 ? familyMembers.map((member, index) => (
+                        <div key={index} className="family-item">
+                            <span className="family-avatar">{member.avatar || '👤'}</span>
+                            <div className="family-info">
+                                <span className="family-name">{member.name}</span>
+                                <span className="family-relation">{member.relation}</span>
+                            </div>
+                            {member.phone && (
+                                <a href={`tel:${member.phone}`} className="family-action">
+                                    <Phone size={18} />
+                                </a>
+                            )}
+                        </div>
+                    )) : (
+                        <div className="empty-state">
+                            <Phone size={48} />
+                            <p>No family members added yet</p>
+                            <Link to="/onboarding" className="cta-link">Add family members</Link>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {appointments.length > 0 && (
+                <div className="dashboard-card">
+                    <div className="card-header">
+                        <h3>Upcoming Appointments</h3>
+                    </div>
+                    <div className="appointment-list">
+                        {appointments.map((appointment, index) => (
+                            <div key={index} className="appointment-item detailed">
+                                <div className="appointment-time">
+                                    <Clock size={16} />
+                                    <span>{formatTime(appointment.date_time)}</span>
+                                </div>
+                                <div className="appointment-info">
+                                    <span className="appointment-title">{appointment.title}</span>
+                                    <span className="appointment-type">{appointment.type}</span>
+                                    {appointment.location && (
+                                        <span className="appointment-location">📍 {appointment.location}</span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

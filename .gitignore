@@ -26,7 +26,14 @@ dist-ssr
 agent/_pycache_
 \venv
 .env
+.env.local
+.env.production
+.env.*.local
 \node_modules
 \__pycache__
 \docs
 \demoforanamai
+
+# Deployment
+.vercel
+.railway

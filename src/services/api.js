@@ -2,10 +2,10 @@
  * API Service for Amble Backend
  * 
  * Handles all HTTP communication with the FastAPI backend.
- * Base URL: http://localhost:8000
+ * Base URL: http://localhost:8000 (dev) or VITE_API_URL (production)
  */
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 /**
  * Send a message to the Amble agent (with retry for rate limits)

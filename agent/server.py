@@ -444,7 +444,7 @@ import httpx
 
 class AnamSessionRequest(BaseModel):
     """Request for Anam session token."""
-    avatar_id: str = "ecfb2ddb-80ec-4526-88a7-299a4738957c"  # Default avatar
+    avatar_id: str = "960f614f-ea88-47c3-9883-f02094f70874"  # Default avatar
 
 
 @app.post("/api/anam/session")

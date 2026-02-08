@@ -494,6 +494,7 @@ function getTimeAgo(isoString) {
 
 /* Dashboard Home */
 function DashboardHome({ data, familyData, alertsData, isLoading }) {
+    const { currentUser } = useAuth()
     const currentDate = new Date().toLocaleDateString('en-US', {
         weekday: 'long',
         month: 'long',
@@ -550,7 +551,7 @@ function DashboardHome({ data, familyData, alertsData, isLoading }) {
         <div className="dashboard-home">
             <div className="page-header">
                 <div>
-                    <h1>Welcome, David 👋</h1>
+                    <h1>Welcome, {currentUser?.name?.split(' ')[0] || 'there'} 👋</h1>
                     <p>Here's how {data.name} is doing today</p>
                 </div>
                 <div className="header-date">

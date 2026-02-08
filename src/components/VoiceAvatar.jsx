@@ -166,7 +166,7 @@ export default function VoiceAvatar({
         }
     }
 
-    // ==================== ElevenLabs TTS + Anam Lip-sync ====================
+    // ==================== ElevenLabs WebSocket TTS + Anam Lip-sync ====================
 
     const speakWithAvatar = useCallback(async (text) => {
         if (!text || isSpeaking || text === lastSpokenRef.current) return
@@ -181,41 +181,17 @@ export default function VoiceAvatar({
             setIsListening(false)
         }
 
+        const useAnam = anamStatus === 'ready' && audioInputStreamRef.current
+        console.log('[VoiceAvatar] Speaking with WebSocket:', { useAnam, anamStatus })
+
         try {
-            // Get PCM audio from ElevenLabs via our backend
-            const response = await fetch(`${API_BASE}/api/voice/elevenlabs-tts`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    text,
-                    output_format: 'pcm_16000' // PCM for Anam lip-sync
-                })
-            })
-
-            if (!response.ok) {
-                const err = await response.json().catch(() => ({}))
-                throw new Error(err.detail || 'TTS failed')
+            if (useAnam) {
+                // Use ElevenLabs WebSocket for streaming TTS with Anam lip-sync
+                await streamTTSWithWebSocket(text)
+            } else {
+                // Fallback to REST API + MP3 playback
+                await speakWithRestAPI(text)
             }
-
-            // Get PCM audio data
-            const arrayBuffer = await response.arrayBuffer()
-            const pcmData = new Uint8Array(arrayBuffer)
-
-            // Send to Anam for lip-sync (only if Anam is ready)
-            if (anamStatus === 'ready' && audioInputStreamRef.current) {
-                // Convert to base64 and send in chunks
-                const chunkSize = 4096
-                for (let i = 0; i < pcmData.length; i += chunkSize) {
-                    const chunk = pcmData.slice(i, i + chunkSize)
-                    const base64 = arrayBufferToBase64(chunk.buffer)
-                    audioInputStreamRef.current.sendAudioChunk(base64)
-                }
-                audioInputStreamRef.current.endSequence()
-            }
-
-            // Play audio locally (always - works with or without Anam)
-            await playPcmAudio(arrayBuffer)
-
         } catch (err) {
             console.error('[VoiceAvatar] TTS error:', err)
         } finally {
@@ -228,7 +204,138 @@ export default function VoiceAvatar({
         }
     }, [isSpeaking, voiceEnabled, isListening, anamStatus])
 
-    // Play PCM audio through Web Audio API
+    // Stream TTS via ElevenLabs WebSocket - sends audio chunks to Anam for lip-sync
+    async function streamTTSWithWebSocket(text) {
+        const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY
+        const voiceId = import.meta.env.VITE_ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM' // Rachel
+
+        if (!apiKey) {
+            console.warn('[VoiceAvatar] No ElevenLabs API key, falling back to REST')
+            return speakWithRestAPI(text)
+        }
+
+        return new Promise((resolve, reject) => {
+            const ws = new WebSocket(
+                `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=eleven_multilingual_v2&output_format=pcm_16000`
+            )
+
+            ws.onopen = () => {
+                console.log('[ElevenLabs WS] Connected, sending text...')
+                
+                // Send initial config with API key
+                ws.send(JSON.stringify({
+                    text: " ", // Initial space to start
+                    voice_settings: {
+                        stability: 0.5,
+                        similarity_boost: 0.75
+                    },
+                    xi_api_key: apiKey
+                }))
+
+                // Send the actual text
+                ws.send(JSON.stringify({
+                    text: text,
+                    try_trigger_generation: true
+                }))
+
+                // Signal end of input
+                ws.send(JSON.stringify({
+                    text: ""
+                }))
+            }
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data)
+
+                if (msg.audio) {
+                    // Forward base64 audio chunk directly to Anam for lip-sync
+                    if (audioInputStreamRef.current) {
+                        audioInputStreamRef.current.sendAudioChunk(msg.audio)
+                    }
+                }
+
+                if (msg.isFinal) {
+                    console.log('[ElevenLabs WS] Stream complete')
+                    if (audioInputStreamRef.current) {
+                        audioInputStreamRef.current.endSequence()
+                    }
+                    ws.close()
+                    resolve()
+                }
+
+                if (msg.error) {
+                    console.error('[ElevenLabs WS] Error:', msg.error)
+                    reject(new Error(msg.error))
+                }
+            }
+
+            ws.onerror = (err) => {
+                console.error('[ElevenLabs WS] WebSocket error:', err)
+                reject(err)
+            }
+
+            ws.onclose = () => {
+                console.log('[ElevenLabs WS] Closed')
+            }
+
+            // Timeout after 30s
+            setTimeout(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.close()
+                    reject(new Error('TTS timeout'))
+                }
+            }, 30000)
+        })
+    }
+
+    // Fallback: REST API + MP3 playback (when Anam is not available)
+    async function speakWithRestAPI(text) {
+        const response = await fetch(`${API_BASE}/api/voice/elevenlabs-tts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                text,
+                output_format: 'mp3_44100_128'
+            })
+        })
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}))
+            throw new Error(err.detail || 'TTS failed')
+        }
+
+        const arrayBuffer = await response.arrayBuffer()
+        await playMp3Audio(arrayBuffer)
+    }
+
+    // Play MP3 audio using HTML5 Audio element (most reliable)
+    async function playMp3Audio(arrayBuffer) {
+        return new Promise((resolve, reject) => {
+            try {
+                const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
+                const url = URL.createObjectURL(blob)
+                const audio = new Audio(url)
+                
+                audio.onended = () => {
+                    URL.revokeObjectURL(url)
+                    resolve()
+                }
+                
+                audio.onerror = (e) => {
+                    URL.revokeObjectURL(url)
+                    console.error('[VoiceAvatar] MP3 playback error:', e)
+                    reject(e)
+                }
+                
+                audio.play().catch(reject)
+            } catch (err) {
+                console.error('[VoiceAvatar] Audio setup error:', err)
+                reject(err)
+            }
+        })
+    }
+
+    // Play PCM audio through Web Audio API (for Anam lip-sync)
     async function playPcmAudio(arrayBuffer) {
         try {
             // Create audio context if needed
@@ -236,9 +343,19 @@ export default function VoiceAvatar({
                 audioContextRef.current = new AudioContext({ sampleRate: 16000 })
             }
             const ctx = audioContextRef.current
+            
+            // Resume context if suspended (browser autoplay policy)
+            if (ctx.state === 'suspended') {
+                await ctx.resume()
+            }
 
+            // Handle byte alignment - Int16Array needs multiple of 2
+            const byteLength = arrayBuffer.byteLength
+            const alignedLength = byteLength - (byteLength % 2)
+            const uint8View = new Uint8Array(arrayBuffer, 0, alignedLength)
+            const int16Array = new Int16Array(uint8View.buffer, uint8View.byteOffset, alignedLength / 2)
+            
             // Convert PCM Int16 to Float32
-            const int16Array = new Int16Array(arrayBuffer)
             const float32Array = new Float32Array(int16Array.length)
             for (let i = 0; i < int16Array.length; i++) {
                 float32Array[i] = int16Array[i] / 32768.0
@@ -259,7 +376,8 @@ export default function VoiceAvatar({
             })
 
         } catch (err) {
-            console.error('[VoiceAvatar] Audio playback error:', err)
+            console.error('[VoiceAvatar] PCM playback error:', err)
+            // Fallback: try to play as MP3 by fetching again
         }
     }
 
