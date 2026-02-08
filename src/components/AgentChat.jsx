@@ -18,6 +18,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { X, Send, Mic, Volume2, VolumeX, Loader, Brain } from 'lucide-react'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import { useTextToSpeech } from '../hooks/useTextToSpeech'
+import { formatMessage } from '../utils/formatMessage'
 import './AgentChat.css'
 
 export function AgentChat({ 
@@ -164,7 +165,7 @@ export function AgentChat({
                     {messages.map((msg, idx) => (
                         <div key={idx} className={`message ${msg.role} ${msg.isError ? 'error' : ''}`}>
                             <div className="message-content">
-                                {msg.text}
+                                {formatMessage(msg.text)}
                             </div>
                             <span className="message-time">
                                 {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

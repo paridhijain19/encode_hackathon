@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@anam-ai/js-sdk'
+import { formatMessage } from '../utils/formatMessage'
 
 export default function ConversationalAvatar({
     onTranscript,
@@ -438,7 +439,9 @@ export default function ConversationalAvatar({
                     borderLeft: '4px solid #4CAF50'
                 }}>
                     <strong style={{ color: '#2E7D32' }}>Amble:</strong>{' '}
-                    <span style={{ color: '#333' }}>{lastResponse}</span>
+                    <div style={{ color: '#333', marginTop: '8px' }}>
+                        {formatMessage(lastResponse)}
+                    </div>
                 </div>
             )}
 
