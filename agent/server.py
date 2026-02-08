@@ -444,7 +444,7 @@ import httpx
 
 class AnamSessionRequest(BaseModel):
     """Request for Anam session token."""
-    avatar_id: str = "30fa96d0-26c4-4e55-94a0-517025942e18"  # Default avatar
+    avatar_id: str = "ecfb2ddb-80ec-4526-88a7-299a4738957c"  # Default avatar
 
 
 @app.post("/api/anam/session")
@@ -1703,6 +1703,78 @@ async def text_to_speech(request: TextToSpeechRequest):
 
     except Exception as e:
         print(f"[VOICE] Text-to-speech error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate speech: {str(e)}")
+
+
+class ElevenLabsTTSRequest(BaseModel):
+    """Request body for ElevenLabs text-to-speech endpoint."""
+    text: str
+    voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # Rachel - default warm female voice
+    model_id: str = "eleven_multilingual_v2"  # Updated to v2 for free tier support
+    output_format: str = "mp3_44100_128"  # or pcm_16000 for Anam lip-sync
+
+
+@app.post("/api/voice/elevenlabs-tts")
+async def elevenlabs_text_to_speech(request: ElevenLabsTTSRequest):
+    """
+    Convert text to speech using ElevenLabs API.
+    
+    Returns high-quality speech audio suitable for avatar lip-sync.
+    Use output_format=pcm_16000 for Anam integration.
+    """
+    api_key = os.getenv("ELEVENLABS_API_KEY")
+    
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="ELEVENLABS_API_KEY not configured. Add it to .env for ElevenLabs voice."
+        )
+    
+    # Determine content type based on format
+    content_type = "audio/mpeg" if request.output_format.startswith("mp3") else "audio/pcm"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{request.voice_id}",
+                headers={
+                    "Accept": content_type,
+                    "Content-Type": "application/json",
+                    "xi-api-key": api_key,
+                },
+                json={
+                    "text": request.text,
+                    "model_id": request.model_id,
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.75,
+                    },
+                    "output_format": request.output_format
+                },
+                timeout=30.0
+            )
+            
+            if response.status_code != 200:
+                print(f"[ElevenLabs] API Error: {response.text}")
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"ElevenLabs API error: {response.text}"
+                )
+            
+            # Return audio stream
+            audio_stream = io.BytesIO(response.content)
+            return StreamingResponse(
+                audio_stream,
+                media_type=content_type,
+                headers={
+                    "Content-Disposition": f"inline; filename=speech.{'mp3' if content_type == 'audio/mpeg' else 'pcm'}"
+                }
+            )
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="ElevenLabs API timeout")
+    except Exception as e:
+        print(f"[ElevenLabs] TTS error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate speech: {str(e)}")
 
 

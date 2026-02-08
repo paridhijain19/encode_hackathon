@@ -1,0 +1,344 @@
+/**
+ * Voice Avatar Styles
+ * 
+ * Styles for Anam video avatar with ElevenLabs voice integration.
+ * Includes animated fallback orb when video is unavailable.
+ */
+
+.voice-avatar-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 24px;
+    width: 100%;
+}
+
+/* ==================== Avatar Display ==================== */
+
+.avatar-display {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    background: linear-gradient(135deg, #E8D5B7 0%, #C4A484 100%);
+    box-shadow: 0 12px 48px rgba(196, 164, 132, 0.3);
+    transition: all 0.3s ease;
+    border: 4px solid white;
+}
+
+.avatar-display:hover {
+    transform: scale(1.02);
+}
+
+/* State-based glow effects */
+.avatar-display.listening {
+    box-shadow: 0 12px 48px rgba(139, 195, 74, 0.4);
+    animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.avatar-display.speaking {
+    box-shadow: 0 0 50px rgba(76, 175, 80, 0.4);
+    background: linear-gradient(135deg, #81C784 0%, #4CAF50 100%);
+}
+
+.avatar-display.thinking {
+    box-shadow: 0 12px 48px rgba(255, 183, 77, 0.4);
+    background: linear-gradient(135deg, #fff3e0 0%, #ffcc80 100%);
+}
+
+@keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 12px 48px rgba(139, 195, 74, 0.4); }
+    50% { box-shadow: 0 16px 56px rgba(139, 195, 74, 0.6); }
+}
+
+/* ==================== Video Avatar ==================== */
+
+.avatar-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-loading {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+}
+
+/* ==================== Fallback Orb ==================== */
+
+.avatar-orb {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.orb-core {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #E8D5B7 0%, #C4A484 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+    box-shadow: 0 8px 32px rgba(196, 164, 132, 0.3);
+    transition: all 0.3s ease;
+}
+
+.avatar-display.listening .orb-core {
+    background: linear-gradient(135deg, #C5E1A5 0%, #8BC34A 100%);
+}
+
+.avatar-display.speaking .orb-core {
+    background: linear-gradient(135deg, #A5D6A7 0%, #66BB6A 100%);
+}
+
+.avatar-display.thinking .orb-core {
+    background: linear-gradient(135deg, #fff3e0 0%, #ffcc80 100%);
+    animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.orb-emoji {
+    font-size: 48px;
+}
+
+/* Animated Rings */
+.orb-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid rgba(139, 195, 74, 0.4);
+    animation: ring-pulse 2s ease-out infinite;
+}
+
+.ring-1 {
+    width: 140px;
+    height: 140px;
+    animation-delay: 0s;
+}
+
+.ring-2 {
+    width: 170px;
+    height: 170px;
+    animation-delay: 0.3s;
+}
+
+.ring-3 {
+    width: 200px;
+    height: 200px;
+    animation-delay: 0.6s;
+}
+
+.avatar-display.speaking .orb-ring {
+    border-color: rgba(76, 175, 80, 0.5);
+}
+
+@keyframes ring-pulse {
+    0% {
+        transform: scale(0.8);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.2);
+        opacity: 0;
+    }
+}
+
+/* ==================== Status Badges ==================== */
+
+.status-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.badge.success {
+    background: #E8F5E9;
+    color: #2E7D32;
+}
+
+.badge.loading {
+    background: #FFF3E0;
+    color: #E65100;
+}
+
+.badge.error {
+    background: #FFEBEE;
+    color: #C62828;
+}
+
+.badge.warning {
+    background: #FFF8E1;
+    color: #F57C00;
+}
+
+/* ==================== Status Text ==================== */
+
+.avatar-status {
+    text-align: center;
+    min-height: 28px;
+}
+
+.status-text {
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 6px 16px;
+    border-radius: 20px;
+    display: inline-block;
+}
+
+.status-text.idle {
+    color: #666;
+}
+
+.status-text.listening {
+    color: #8BC34A;
+    animation: status-pulse 1.5s ease-in-out infinite;
+}
+
+.status-text.speaking {
+    color: #43A047;
+}
+
+.status-text.thinking {
+    color: #F57C00;
+}
+
+.status-text.error {
+    color: #d32f2f;
+}
+
+@keyframes status-pulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}
+
+/* ==================== Transcript ==================== */
+
+.transcript {
+    max-width: 300px;
+    padding: 12px 20px;
+    background: #FFF8E1;
+    border-radius: 16px;
+    border-left: 4px solid #FFB300;
+    text-align: center;
+}
+
+.transcript span {
+    font-size: 0.9rem;
+    color: #333;
+    font-style: italic;
+}
+
+/* ==================== Voice Toggle ==================== */
+
+.avatar-controls {
+    margin-top: 8px;
+}
+
+.voice-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    border: 2px solid #d1d9d5;
+    border-radius: 50px;
+    background: white;
+    color: #4a6354;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.voice-toggle:hover:not(:disabled) {
+    border-color: #3d8c5c;
+    color: #2d5a3f;
+    background: #f8faf9;
+}
+
+.voice-toggle.active {
+    background: linear-gradient(135deg, #4caf50 0%, #43a047 100%);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 4px 16px rgba(76, 175, 80, 0.3);
+}
+
+.voice-toggle.active:hover:not(:disabled) {
+    background: linear-gradient(135deg, #43a047 0%, #388e3c 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.voice-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ==================== Utility ==================== */
+
+.spin {
+    animation: spin 1s linear infinite;
+    color: #E65100;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ==================== Responsive ==================== */
+
+@media (max-width: 480px) {
+    .voice-avatar-container {
+        padding: 16px;
+    }
+
+    .avatar-display {
+        width: 180px;
+        height: 180px;
+    }
+
+    .orb-core {
+        width: 100px;
+        height: 100px;
+    }
+
+    .orb-emoji {
+        font-size: 40px;
+    }
+
+    .ring-1 { width: 115px; height: 115px; }
+    .ring-2 { width: 140px; height: 140px; }
+    .ring-3 { width: 165px; height: 165px; }
+
+    .voice-toggle {
+        padding: 12px 20px;
+        font-size: 0.9rem;
+    }
+}
