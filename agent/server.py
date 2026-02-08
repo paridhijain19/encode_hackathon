@@ -17,6 +17,16 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional, List
 from datetime import datetime
+import warnings
+
+# Suppress known deprecation warnings from third-party libraries
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="pyiceberg")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="supabase")
+warnings.filterwarnings("ignore", message=".*enablePackrat.*")
+warnings.filterwarnings("ignore", message=".*escChar.*")
+warnings.filterwarnings("ignore", message=".*unquoteResults.*")
+warnings.filterwarnings("ignore", message=".*@model_validator.*mode='after'.*")
+warnings.filterwarnings("ignore", message=".*verify.*parameter.*deprecated.*")
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -125,7 +135,13 @@ from agent.supabase_store import (
     get_family_summary as db_get_family_summary,
     get_wellness_data as db_get_wellness_data,
     list_users as db_list_users,
-    register_user as db_register_user
+    register_user as db_register_user,
+    # Family linking functions
+    link_family_member as db_link_family_member,
+    unlink_family_member as db_unlink_family_member,
+    get_linked_elder as db_get_linked_elder,
+    get_family_members_for_elder as db_get_family_members_for_elder,
+    get_active_elders as db_get_active_elders
 )
 
 # Simple rate limiter for Google API (to avoid 429 errors)
@@ -201,10 +217,10 @@ def search_memory(user_id: str, query: str, limit: int = 5) -> List[dict]:
     
     try:
         # Search with user_id filter to scope memories to this user only
-        # Mem0 API requires user_id as a direct parameter, not in filters
+        # Mem0 API v2 requires filters as a dictionary parameter
         results = mem0_client.search(
             query=query,
-            user_id=user_id,
+            filters={"user_id": user_id},
             top_k=limit
         )
         
@@ -422,6 +438,67 @@ async def health():
     return {"status": "ok", "agent": "amble"}
 
 
+# ==================== ANAM AI SESSION ENDPOINT ====================
+
+import httpx
+
+class AnamSessionRequest(BaseModel):
+    """Request for Anam session token."""
+    avatar_id: str = "30fa96d0-26c4-4e55-94a0-517025942e18"  # Default avatar
+
+
+@app.post("/api/anam/session")
+async def get_anam_session(request: AnamSessionRequest):
+    """
+    Get Anam AI session token for video avatar with audio passthrough.
+    
+    This enables ElevenLabs audio to be sent to Anam for lip-sync.
+    """
+    anam_api_key = os.getenv("ANAM_API_KEY")
+    
+    if not anam_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="ANAM_API_KEY not configured. Add it to .env for video avatar."
+        )
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.anam.ai/v1/auth/session-token",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {anam_api_key}",
+                },
+                json={
+                    "personaConfig": {
+                        "avatarId": request.avatar_id,
+                        "enableAudioPassthrough": True,  # For ElevenLabs audio
+                    }
+                },
+                timeout=10.0
+            )
+            
+            if response.status_code != 200:
+                print(f"[Anam] API Error: {response.text}")
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Anam API error: {response.text}"
+                )
+            
+            data = response.json()
+            print(f"[Anam] API Response: {data}")
+            return {
+                "sessionToken": data.get("sessionToken"),
+                "avatarId": request.avatar_id
+            }
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Anam API timeout")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== USER MANAGEMENT ENDPOINTS ====================
 
 class RegisterUserRequest(BaseModel):
@@ -491,16 +568,16 @@ async def get_state(user_id: str = "default_user"):
     if mem0_client is not None:
         try:
             # Use search instead of get_all to avoid filter requirement errors
-            # Search with a broad query to get memory count
+            # Mem0 API v2 requires filters as a dictionary parameter
             memories = mem0_client.search(
                 query="user information preferences activities",
-                user_id=user_id,
-                limit=100
+                filters={"user_id": user_id},
+                top_k=100
             )
             memory_count = len(memories) if memories else 0
         except Exception as e:
             # Silently handle - memory count is optional
-            print(f"HTTP error occurred: {e}")
+            print(f"[WARN] Failed to count memories: {e}")
             pass  # Don't fail if memory count fails
     
     return StateResponse(
@@ -849,6 +926,254 @@ async def create_notification(user_id: str, notification: dict):
     return {"status": "success"}
 
 
+@app.post("/api/notifications/{user_id}/demo")
+async def trigger_demo_notifications(user_id: str):
+    """Trigger proactive notifications based on time of day."""
+    from datetime import datetime
+    
+    hour = datetime.now().hour
+    name = "there"
+    
+    # Try to get user name and data
+    try:
+        profile = db_get_profile(user_id)
+        if profile and profile.get("name"):
+            name = profile["name"]
+    except:
+        pass
+    
+    # Morning (5 AM - 12 PM): Health focus
+    if 5 <= hour < 12:
+        _add_notification(user_id, {
+            "type": "greeting",
+            "title": "Good Morning! ☀️",
+            "message": f"Rise and shine, {name}! A new day awaits you.",
+            "action": "Say Hi"
+        })
+        
+        # Morning health suggestions
+        if hour < 9:
+            _add_notification(user_id, {
+                "type": "medication",
+                "title": "Morning Medication 💊",
+                "message": "Time for your morning medicines. Stay healthy!",
+                "action": "Mark Taken"
+            })
+        
+        _add_notification(user_id, {
+            "type": "wellness",
+            "title": "Start Your Day Right 🌿",
+            "message": "Try 5 minutes of gentle stretching to wake up your body!",
+            "action": "Log Activity"
+        })
+    
+    # Afternoon (12 PM - 5 PM): Activity focus
+    elif 12 <= hour < 17:
+        _add_notification(user_id, {
+            "type": "checkin",
+            "title": "Afternoon Boost ☕",
+            "message": f"Hope you're having a great day, {name}!",
+            "action": "Chat"
+        })
+        
+        if hour == 14:
+            _add_notification(user_id, {
+                "type": "medication",
+                "title": "Afternoon Medication 💊",
+                "message": "Don't forget your afternoon medicines!",
+                "action": "Mark Taken"
+            })
+        
+        _add_notification(user_id, {
+            "type": "activity",
+            "title": "Time to Move! 🚶",
+            "message": "A 15-minute walk after lunch helps digestion and energy.",
+            "action": "Log Walk"
+        })
+    
+    # Evening (5 PM - 9 PM): Relaxation focus
+    elif 17 <= hour < 21:
+        _add_notification(user_id, {
+            "type": "greeting",
+            "title": "Good Evening! 🌅",
+            "message": f"Winding down, {name}? You've earned a peaceful evening.",
+            "action": "Share"
+        })
+        
+        if hour >= 20:
+            _add_notification(user_id, {
+                "type": "medication",
+                "title": "Evening Medication 💊",
+                "message": "Time for your evening medicines before bed.",
+                "action": "Mark Taken"
+            })
+        
+        _add_notification(user_id, {
+            "type": "wellness",
+            "title": "Relaxation Time 🧘",
+            "message": "Try some deep breathing or light reading to relax.",
+            "action": "Log Activity"
+        })
+    
+    # Night (9 PM - 5 AM): Rest focus
+    else:
+        _add_notification(user_id, {
+            "type": "greeting",
+            "title": "Good Night! 🌙",
+            "message": f"Rest well, {name}. Tomorrow is a new day!",
+            "action": "Dismiss"
+        })
+        
+        _add_notification(user_id, {
+            "type": "wellness",
+            "title": "Sleep Tip 😴",
+            "message": "Keep your room cool and dark for better sleep quality.",
+            "action": "Dismiss"
+        })
+    
+    return {"status": "success", "notifications_added": 3}
+
+
+@app.get("/api/proactive/{user_id}/greeting")
+async def get_proactive_greeting(user_id: str):
+    """Get a proactive greeting and optionally add notification."""
+    from datetime import datetime
+    
+    hour = datetime.now().hour
+    name = "there"
+    
+    try:
+        profile = db_get_profile(user_id)
+        if profile and profile.get("name"):
+            name = profile["name"]
+    except:
+        pass
+    
+    # Create contextual greeting
+    if 5 <= hour < 12:
+        greeting = f"Good morning, {name}! ☀️"
+        suggestion = "How did you sleep?"
+    elif 12 <= hour < 17:
+        greeting = f"Good afternoon, {name}! 🌤️"
+        suggestion = "Had lunch yet?"
+    elif 17 <= hour < 21:
+        greeting = f"Good evening, {name}! 🌅"
+        suggestion = "How was your day?"
+    else:
+        greeting = f"Hello, {name}! 🌙"
+        suggestion = "Everything okay?"
+    
+    return {
+        "greeting": greeting,
+        "suggestion": suggestion,
+        "time_of_day": "morning" if hour < 12 else "afternoon" if hour < 17 else "evening" if hour < 21 else "night",
+        "user_name": name
+    }
+
+
+@app.get("/api/proactive/{user_id}/health-suggestions")
+async def get_health_suggestions(user_id: str):
+    """Get personalized health and activity suggestions based on user data."""
+    from datetime import datetime, timedelta
+    
+    suggestions = []
+    name = "there"
+    
+    try:
+        profile = db_get_profile(user_id)
+        if profile and profile.get("name"):
+            name = profile["name"]
+    except:
+        pass
+    
+    # Get recent activities
+    try:
+        activities = db_get_activities(user_id, period="week")
+        today_activities = db_get_activities(user_id, period="today")
+        
+        # If no activity today
+        if not today_activities:
+            suggestions.append({
+                "type": "activity",
+                "icon": "🚶",
+                "title": "Get Moving!",
+                "message": "You haven't logged any activity today. Even a short walk helps!",
+                "action": "Log Activity"
+            })
+        
+        # Calculate weekly activity
+        total_mins = sum(a.get("duration_minutes", 0) or 0 for a in activities)
+        if total_mins < 150:  # WHO recommends 150 mins/week
+            suggestions.append({
+                "type": "wellness",
+                "icon": "💪",
+                "title": "Weekly Goal",
+                "message": f"You've done {total_mins} mins this week. Aim for 150 mins!",
+                "action": "View Progress"
+            })
+    except:
+        pass
+    
+    # Get mood data
+    try:
+        moods = db_get_moods(user_id, period="week")
+        if moods:
+            recent_mood = moods[0].get("rating", "").lower()
+            if recent_mood in ["sad", "tired", "anxious", "lonely"]:
+                suggestions.append({
+                    "type": "wellness",
+                    "icon": "🌸",
+                    "title": "Self-Care Reminder",
+                    "message": "Call a friend or try some calming music today.",
+                    "action": "Log Mood"
+                })
+    except:
+        pass
+    
+    # Time-based suggestions
+    hour = datetime.now().hour
+    
+    if 7 <= hour < 10:
+        suggestions.append({
+            "type": "health",
+            "icon": "🍳",
+            "title": "Breakfast Time",
+            "message": "A good breakfast keeps you energized all morning!",
+            "action": "Dismiss"
+        })
+    elif 12 <= hour < 14:
+        suggestions.append({
+            "type": "health",
+            "icon": "🥗",
+            "title": "Lunch Break",
+            "message": "Time for a nutritious lunch. Stay hydrated too!",
+            "action": "Dismiss"
+        })
+    elif 15 <= hour < 17:
+        suggestions.append({
+            "type": "wellness",
+            "icon": "☕",
+            "title": "Afternoon Tea",
+            "message": "Take a break with some tea and light stretching.",
+            "action": "Dismiss"
+        })
+    
+    # Default suggestion if nothing else
+    if not suggestions:
+        suggestions.append({
+            "type": "wellness",
+            "icon": "💚",
+            "title": "You're Doing Great!",
+            "message": f"Keep it up, {name}! Consistency is key.",
+            "action": "Dismiss"
+        })
+    
+    return {
+        "suggestions": suggestions[:5],  # Max 5 suggestions
+        "user_name": name,
+        "generated_at": datetime.now().isoformat()
+    }
+
 # ==================== FAMILY PORTAL ENDPOINTS ====================
 
 @app.get("/api/family/{elder_user_id}/summary")
@@ -905,17 +1230,110 @@ async def get_chat_messages(user_id: str, limit: int = 100):
         chat_history = db_get_chat_history(user_id, limit=limit)
         
         # Transform to the format expected by the frontend
+        # Note: DB columns are user_message, agent_response, created_at
         messages = []
         for entry in chat_history:
             messages.append({
-                "message": entry.get("message", ""),
-                "response": entry.get("response", ""),
-                "timestamp": entry.get("timestamp", "")
+                "message": entry.get("user_message", ""),
+                "response": entry.get("agent_response", ""),
+                "timestamp": entry.get("created_at", "")
             })
         
         return {
             "messages": messages,
             "total_count": len(messages)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== FAMILY LINKING ENDPOINTS ====================
+
+class LinkFamilyRequest(BaseModel):
+    """Request body for linking family member to elder."""
+    family_user_id: str
+    elder_id: str
+
+
+@app.post("/api/family/link")
+async def link_family_to_elder(request: LinkFamilyRequest):
+    """Link a family member to an elder user."""
+    try:
+        success = db_link_family_member(request.family_user_id, request.elder_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to link family member")
+        
+        return {
+            "success": True,
+            "message": f"Family member {request.family_user_id} linked to elder {request.elder_id}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/family/unlink/{family_user_id}")
+async def unlink_family_from_elder(family_user_id: str):
+    """Remove the elder link from a family member."""
+    try:
+        success = db_unlink_family_member(family_user_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to unlink family member")
+        
+        return {
+            "success": True,
+            "message": f"Family member {family_user_id} unlinked from elder"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/family/linked-elder/{family_user_id}")
+async def get_family_linked_elder(family_user_id: str):
+    """Get the elder that a family member is linked to."""
+    try:
+        elder = db_get_linked_elder(family_user_id)
+        if not elder:
+            return {"linked_elder": None}
+        
+        # Return simplified elder profile
+        prefs = elder.get("preferences") or {}
+        return {
+            "linked_elder": {
+                "id": elder.get("user_id"),
+                "name": elder.get("name"),
+                "avatar": prefs.get("avatar", "👴"),
+                "location": elder.get("location"),
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/family/members/{elder_id}")
+async def get_elder_family_members(elder_id: str):
+    """Get all family members linked to a specific elder."""
+    try:
+        members = db_get_family_members_for_elder(elder_id)
+        return {
+            "family_members": members,
+            "count": len(members)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/elders")
+async def get_active_elders():
+    """Get all active elder users (for family member picker)."""
+    try:
+        elders = db_get_active_elders()
+        return {
+            "elders": elders,
+            "count": len(elders)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1166,6 +1584,221 @@ without invoking the AI agent. Use these for form-based inputs.
 """
 
 from agent.supabase_store import save_expense, save_activity, save_appointment
+
+
+# ==================== VOICE ENDPOINTS ====================
+"""
+Voice interaction endpoints using OpenAI's Whisper (STT) and TTS APIs.
+These enable voice-first interactions for elderly users.
+"""
+
+from fastapi import File, UploadFile
+from fastapi.responses import StreamingResponse
+import io
+import openai
+
+
+class TextToSpeechRequest(BaseModel):
+    """Request body for text-to-speech endpoint."""
+    text: str
+    voice: str = "alloy"  # Options: alloy, echo, fable, onyx, nova, shimmer
+
+
+@app.post("/api/voice/speech-to-text")
+async def speech_to_text(audio: UploadFile = File(...)):
+    """
+    Convert speech audio to text using OpenAI Whisper API.
+
+    This endpoint accepts audio files in various formats (mp3, mp4, mpeg, mpga, m4a, wav, webm)
+    and returns the transcribed text.
+
+    Args:
+        audio: Audio file upload containing the speech to transcribe
+
+    Returns:
+        JSON with transcribed text
+
+    Usage:
+        - Upload audio file from voice recorder
+        - Get back transcribed text to use in chat
+        - Supports multiple audio formats
+    """
+    try:
+        # Read audio file content
+        audio_content = await audio.read()
+
+        # Create a file-like object from the bytes
+        audio_file = io.BytesIO(audio_content)
+        audio_file.name = audio.filename or "audio.wav"
+
+        # Initialize OpenAI client
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
+
+        client = openai.OpenAI(api_key=api_key)
+
+        # Transcribe using Whisper
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            response_format="text"
+        )
+
+        return {
+            "status": "success",
+            "text": transcript,
+            "filename": audio.filename
+        }
+
+    except Exception as e:
+        print(f"[VOICE] Speech-to-text error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to transcribe audio: {str(e)}")
+
+
+@app.post("/api/voice/text-to-speech")
+async def text_to_speech(request: TextToSpeechRequest):
+    """
+    Convert text to speech audio using OpenAI TTS API.
+
+    This endpoint accepts text and returns speech audio that can be played back.
+    Uses a warm, friendly voice suitable for elderly users.
+
+    Args:
+        request: Contains text to convert and optional voice selection
+
+    Returns:
+        Audio file (mp3) stream
+
+    Usage:
+        - Send agent response text
+        - Receive audio file to play back
+        - Configurable voice options
+    """
+    try:
+        # Initialize OpenAI client
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
+
+        client = openai.OpenAI(api_key=api_key)
+
+        # Generate speech using TTS
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice=request.voice,
+            input=request.text
+        )
+
+        # Stream the audio response
+        audio_stream = io.BytesIO(response.content)
+
+        return StreamingResponse(
+            audio_stream,
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": f"inline; filename=speech.mp3"
+            }
+        )
+
+    except Exception as e:
+        print(f"[VOICE] Text-to-speech error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate speech: {str(e)}")
+
+
+@app.post("/api/voice/chat")
+async def voice_chat(audio: UploadFile = File(...), user_id: str = "default_user", session_id: Optional[str] = None):
+    """
+    Voice chat endpoint - combines speech-to-text, agent response, and text-to-speech.
+
+    This is a complete voice interaction flow:
+    1. Transcribe user's voice input
+    2. Get agent response
+    3. Convert response to speech
+    4. Return both text and audio
+
+    Args:
+        audio: Voice input from user
+        user_id: User identifier
+        session_id: Optional session ID for conversation continuity
+
+    Returns:
+        JSON with both text transcription and audio response
+    """
+    global runner
+
+    try:
+        # Step 1: Transcribe audio to text
+        audio_content = await audio.read()
+        audio_file = io.BytesIO(audio_content)
+        audio_file.name = audio.filename or "audio.wav"
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
+
+        client = openai.OpenAI(api_key=api_key)
+
+        # Transcribe
+        user_message = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            response_format="text"
+        )
+
+        # Step 2: Get agent response (reuse existing chat logic)
+        if runner is None:
+            raise HTTPException(status_code=503, detail="Agent not initialized")
+
+        # Get or create session
+        session_id = await get_or_create_session(user_id, session_id)
+
+        # Search for relevant memories
+        memories = search_memory(user_id=user_id, query=user_message, limit=5)
+        memory_context = format_memories_for_context(memories)
+
+        # Run agent
+        response_text = await run_agent(
+            user_id=user_id,
+            session_id=session_id,
+            message=user_message,
+            memory_context=memory_context
+        )
+
+        # Save to memory
+        save_memory(user_id=user_id, user_message=user_message, agent_response=response_text)
+
+        # Save to Supabase
+        db_save_chat(
+            user_id=user_id,
+            session_id=session_id,
+            user_message=user_message,
+            agent_response=response_text
+        )
+
+        # Step 3: Convert response to speech
+        tts_response = client.audio.speech.create(
+            model="tts-1",
+            voice="nova",  # Warm, friendly voice for elderly users
+            input=response_text
+        )
+
+        # Encode audio as base64 for JSON response
+        import base64
+        audio_base64 = base64.b64encode(tts_response.content).decode('utf-8')
+
+        return {
+            "status": "success",
+            "user_message": user_message,
+            "agent_response": response_text,
+            "audio_response": audio_base64,
+            "session_id": session_id,
+            "memories_used": len(memories)
+        }
+
+    except Exception as e:
+        print(f"[VOICE] Voice chat error: {e}")
+        raise HTTPException(status_code=500, detail=f"Voice chat failed: {str(e)}")
 
 
 class DirectExpenseRequest(BaseModel):

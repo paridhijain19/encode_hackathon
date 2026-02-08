@@ -17,21 +17,21 @@ export function useAgent(overrideUserId = null) {
 
     // Use override if provided, otherwise fall back to localStorage
     const userId = overrideUserId || getUserId()
-    
+
     // Track the previous user to detect changes
     const prevUserIdRef = useRef(userId)
 
     // Reset messages and session when user changes
     useEffect(() => {
         console.log('[useAgent] User changed to:', userId, 'from:', prevUserIdRef.current)
-        
+
         // If user actually changed (not just initial mount), clear the old session
         if (prevUserIdRef.current !== userId) {
             console.log('[useAgent] Clearing session for user change')
             clearSession()
             setSessionId(null)
         }
-        
+
         prevUserIdRef.current = userId
         setMessages([])
         setError(null)
@@ -130,9 +130,23 @@ export function useAgent(overrideUserId = null) {
      */
     const lastResponse = messages.filter(m => m.role === 'agent').slice(-1)[0]?.text || null
 
+    /**
+     * Manually add a message to the conversation history
+     * Useful for voice transcripts or other non-API messages
+     */
+    const addMessage = useCallback((message) => {
+        setMessages((prev) => [...prev, {
+            role: message.role || 'user',
+            text: message.text,
+            timestamp: new Date().toISOString(),
+            isError: message.isError || false
+        }])
+    }, [])
+
     return {
         messages,
         chat,
+        addMessage,
         loading,
         error,
         sessionId,

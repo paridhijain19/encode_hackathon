@@ -1129,13 +1129,13 @@ def recall_memories(
             return {"status": "success", "memories": [], "count": 0}
         
         mem0_client = MemoryClient(api_key=api_key)
-        
-        # Search memories - must pass user_id for filtering
+
+        # Search memories - Mem0 API v2 requires filters as a dictionary parameter
         search_query = query if query else "user preferences and personal information"
         memories_result = mem0_client.search(
             query=search_query,
-            user_id=user_id,
-            limit=10
+            filters={"user_id": user_id},
+            top_k=10
         )
         
         results = []

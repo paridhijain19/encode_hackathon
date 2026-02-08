@@ -10,6 +10,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 export function useVoiceInput() {
     const [isListening, setIsListening] = useState(false)
     const [transcript, setTranscript] = useState('')
+    const [interimTranscript, setInterimTranscript] = useState('')
     const [error, setError] = useState(null)
     const [isSupported, setIsSupported] = useState(true)
     
@@ -30,20 +31,37 @@ export function useVoiceInput() {
         
         // Configuration
         recognition.continuous = false      // Stop after one phrase
-        recognition.interimResults = false  // Only final results
+        recognition.interimResults = true   // Show interim results for better feedback
         recognition.lang = 'en-IN'          // English (India) - good for Indian accents
         recognition.maxAlternatives = 1
 
         // Event handlers
         recognition.onstart = () => {
+            console.log('[Voice] Recognition started')
             setIsListening(true)
             setError(null)
+            setInterimTranscript('')
         }
 
         recognition.onresult = (event) => {
-            const result = event.results[event.results.length - 1]
-            const text = result[0].transcript
-            setTranscript(text)
+            let interim = ''
+            let final = ''
+            
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const result = event.results[i]
+                if (result.isFinal) {
+                    final += result[0].transcript
+                } else {
+                    interim += result[0].transcript
+                }
+            }
+            
+            setInterimTranscript(interim)
+            if (final) {
+                console.log('[Voice] Final transcript:', final)
+                setTranscript(final)
+                setInterimTranscript('')
+            }
         }
 
         recognition.onerror = (event) => {
@@ -106,11 +124,13 @@ export function useVoiceInput() {
             return
         }
 
-        // Clear previous transcript
+        // Clear previous transcript and interim
         setTranscript('')
+        setInterimTranscript('')
         setError(null)
 
         try {
+            console.log('[Voice] Starting recognition...')
             recognitionRef.current.start()
         } catch (err) {
             // Recognition may already be started
@@ -120,17 +140,20 @@ export function useVoiceInput() {
 
     const stopListening = useCallback(() => {
         if (recognitionRef.current && isListening) {
+            console.log('[Voice] Stopping recognition...')
             recognitionRef.current.stop()
         }
     }, [isListening])
 
     const clearTranscript = useCallback(() => {
         setTranscript('')
+        setInterimTranscript('')
     }, [])
 
     return {
         isListening,
         transcript,
+        interimTranscript,
         error,
         isSupported,
         startListening,

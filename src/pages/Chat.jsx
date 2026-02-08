@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext'
 import { getState } from '../services/api'
 import { UserBadge, SignInModal } from '../components/SignIn'
 import NotificationBanner from '../components/NotificationBanner'
+import ConversationalAvatar from '../components/ConversationalAvatar'
 import './Chat.css'
 
 // Get contextual greeting based on time of day
@@ -111,9 +112,13 @@ export default function Chat() {
     const lastMessageCountRef = useRef(0)
     const hintIndexRef = useRef(0)
 
+    // Voice mode state - true when using avatar voice, false for text chat
+    const [voiceMode, setVoiceMode] = useState(false)
+    const [avatarConnected, setAvatarConnected] = useState(false)
+
     // Show sign-in if not authenticated
     const needsSignIn = !authLoading && !isSignedIn
-    
+
     // Use current user's name first, then fetch from API
     useEffect(() => {
         if (currentUser?.name) {
@@ -171,7 +176,26 @@ export default function Chat() {
             }
         }
 
+        // Trigger proactive notifications on first load
+        async function triggerProactiveGreeting() {
+            try {
+                // Check if we already triggered today
+                const lastTrigger = sessionStorage.getItem(`amble_greeting_${userId}`)
+                const today = new Date().toDateString()
+
+                if (lastTrigger !== today) {
+                    await fetch(`http://localhost:8000/api/notifications/${userId}/demo`, {
+                        method: 'POST'
+                    })
+                    sessionStorage.setItem(`amble_greeting_${userId}`, today)
+                }
+            } catch (err) {
+                console.log('Could not trigger greeting:', err)
+            }
+        }
+
         loadMemoryHints()
+        triggerProactiveGreeting()
     }, [userId])
 
     // Rotate hints every 5 seconds
@@ -201,22 +225,31 @@ export default function Chat() {
 
     // Auto-send when voice transcript is ready
     useEffect(() => {
-        if (voice.transcript && !agent.loading) {
-            agent.chat(voice.transcript)
+        if (voice.transcript && voice.transcript.trim() && !agent.loading) {
+            const message = voice.transcript.trim()
+            console.log('[Voice] Auto-sending:', message)
+            // Clear transcript first to prevent double-send
             voice.clearTranscript()
+            // Give a small delay to ensure clearTranscript completes
+            setTimeout(() => {
+                agent.chat(message)
+            }, 50)
         }
     }, [voice.transcript])
 
-    // Auto-speak agent responses
+    // Auto-speak agent responses (Disabled in Voice Mode)
     useEffect(() => {
-        if (autoSpeak && agent.messages.length > lastMessageCountRef.current) {
+        // Only auto-speak if NOT in voice mode (ElevenLabs handles voice mode)
+        if (autoSpeak && !voiceMode && agent.messages.length > lastMessageCountRef.current) {
             const lastMsg = agent.messages[agent.messages.length - 1]
             if (lastMsg && lastMsg.role === 'agent' && !lastMsg.isError) {
-                tts.speak(lastMsg.text)
+                console.log('[TTS] Auto-speaking:', lastMsg.text.substring(0, 50) + '...')
+                // Small delay to ensure UI is ready
+                setTimeout(() => tts.speak(lastMsg.text), 100)
             }
         }
         lastMessageCountRef.current = agent.messages.length
-    }, [agent.messages, autoSpeak, tts])
+    }, [agent.messages, autoSpeak, voiceMode])
 
     // Handle send message
     const handleSend = async () => {
@@ -253,8 +286,8 @@ export default function Chat() {
         <div className="chat-page">
             {/* Sign-in modal if not authenticated */}
             {(needsSignIn || showSignIn) && (
-                <SignInModal 
-                    mode="all" 
+                <SignInModal
+                    mode="all"
                     onClose={isSignedIn ? () => setShowSignIn(false) : undefined}
                 />
             )}
@@ -311,9 +344,82 @@ export default function Chat() {
                 </div>
             </aside>
 
+            {/* Mode Toggle - Always visible with inline styles */}
+            <div style={{
+                position: 'fixed',
+                top: '20px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 99999,
+                display: 'flex',
+                justifyContent: 'center',
+                padding: '8px',
+                background: 'white',
+                borderRadius: '50px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                border: '3px solid #C4A484'
+            }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                        onClick={() => setVoiceMode(false)}
+                        style={{
+                            padding: '12px 24px',
+                            border: 'none',
+                            borderRadius: '50px',
+                            fontSize: '1rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            background: !voiceMode ? '#C4A484' : '#f0f0f0',
+                            color: !voiceMode ? 'white' : '#666',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        💬 Text
+                    </button>
+                    <button
+                        onClick={() => setVoiceMode(true)}
+                        style={{
+                            padding: '12px 24px',
+                            border: 'none',
+                            borderRadius: '50px',
+                            fontSize: '1rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            background: voiceMode ? '#4CAF50' : '#f0f0f0',
+                            color: voiceMode ? 'white' : '#666',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        🎙️ Voice
+                    </button>
+                </div>
+            </div>
+
             {/* Main Chat Area */}
-            <main className="chat-main">
-                {!hasMessages ? (
+            <main className={`chat-main ${voiceMode ? 'voice-mode' : ''}`}>
+                {voiceMode ? (
+                    /* Voice Mode - Full screen avatar */
+                    <div className="voice-mode-container">
+                        <ConversationalAvatar
+                            userName={userName}
+                            isActive={voiceMode}
+                            onTranscript={(text) => {
+                                console.log('[Avatar] User said:', text)
+                                // Add user's voice message to chat history
+                                agent.addMessage({ role: 'user', text })
+                            }}
+                            onResponse={(text) => {
+                                console.log('[Avatar] Amble said:', text)
+                                // Add agent's response to chat history
+                                agent.addMessage({ role: 'agent', text })
+                            }}
+                            onStateChange={(state) => {
+                                setAvatarConnected(state === 'connected')
+                                console.log('[Avatar] State:', state)
+                            }}
+                        />
+                    </div>
+                ) : !hasMessages ? (
                     /* Empty State - Welcome Screen */
                     <div className="chat-welcome">
                         <h1 className="welcome-title">Talk with Amble</h1>
@@ -370,7 +476,7 @@ export default function Chat() {
                             <button
                                 className={`tts-toggle ${autoSpeak ? 'active' : ''}`}
                                 onClick={() => { tts.stop(); setAutoSpeak(!autoSpeak) }}
-                                title={autoSpeak ? 'Auto-speak ON' : 'Auto-speak OFF'}
+                                title={autoSpeak ? 'Click to mute auto-speak' : 'Click to enable auto-speak'}
                             >
                                 {autoSpeak ? <Volume2 size={18} /> : <VolumeX size={18} />}
                             </button>
@@ -378,9 +484,9 @@ export default function Chat() {
                                 className={`voice-btn ${voice.isListening ? 'listening' : ''}`}
                                 onClick={toggleVoice}
                                 disabled={!voice.isSupported}
-                                title={voice.isListening ? 'Stop listening' : 'Voice input'}
+                                title={voice.isListening ? 'Listening... (click to stop)' : 'Click to use voice'}
                             >
-                                {voice.isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                                <Mic size={20} />
                             </button>
                             <button
                                 className="send-btn"

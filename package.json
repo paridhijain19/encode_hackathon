@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anam-ai/js-sdk": "^4.8.0",
+    "@elevenlabs/react": "^0.14.0",
     "@supabase/supabase-js": "^2.94.1",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",

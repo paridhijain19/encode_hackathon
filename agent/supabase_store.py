@@ -165,6 +165,125 @@ def get_or_create_user(user_id: str, name: str = None, role: str = "elder") -> D
     return register_user(user_id, name or user_id, role)
 
 
+# ==================== FAMILY LINKING ====================
+
+def link_family_member(family_user_id: str, elder_id: str) -> bool:
+    """
+    Link a family member to an elder user.
+    Updates the family member's profile with the linked_elder_id.
+    """
+    client = _get_client()
+    
+    try:
+        # First get current profile to preserve other preferences
+        profile = get_profile(family_user_id)
+        if not profile:
+            print(f"[WARN] Cannot link - family member {family_user_id} not found")
+            return False
+        
+        # Update preferences with linked_elder_id
+        prefs = profile.get("preferences") or {}
+        prefs["linked_elder_id"] = elder_id
+        
+        client.table("user_profiles").update({
+            "preferences": prefs,
+            "updated_at": datetime.now().isoformat()
+        }).eq("user_id", family_user_id).execute()
+        
+        print(f"[OK] Linked family member {family_user_id} to elder {elder_id}")
+        return True
+    except Exception as e:
+        print(f"[WARN] Failed to link family member: {e}")
+        return False
+
+
+def unlink_family_member(family_user_id: str) -> bool:
+    """Remove the elder link from a family member."""
+    client = _get_client()
+    
+    try:
+        profile = get_profile(family_user_id)
+        if not profile:
+            return False
+        
+        prefs = profile.get("preferences") or {}
+        prefs.pop("linked_elder_id", None)
+        
+        client.table("user_profiles").update({
+            "preferences": prefs,
+            "updated_at": datetime.now().isoformat()
+        }).eq("user_id", family_user_id).execute()
+        
+        return True
+    except Exception as e:
+        print(f"[WARN] Failed to unlink family member: {e}")
+        return False
+
+
+def get_linked_elder(family_user_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the elder that a family member is linked to.
+    Returns the elder's profile or None if not linked.
+    """
+    profile = get_profile(family_user_id)
+    if not profile:
+        return None
+    
+    prefs = profile.get("preferences") or {}
+    elder_id = prefs.get("linked_elder_id")
+    
+    if not elder_id:
+        return None
+    
+    return get_profile(elder_id)
+
+
+def get_family_members_for_elder(elder_id: str) -> List[Dict[str, Any]]:
+    """
+    Get all family members linked to a specific elder.
+    Returns list of family member profiles.
+    """
+    client = _get_client()
+    
+    try:
+        result = client.table("user_profiles").select("*").execute()
+        
+        family_members = []
+        for row in (result.data or []):
+            prefs = row.get("preferences") or {}
+            linked_elder = prefs.get("linked_elder_id")
+            role = prefs.get("role", "parent")
+            
+            # Skip if not linked to this elder or is the elder themselves
+            if linked_elder != elder_id:
+                continue
+            
+            # Skip if not a family role
+            if role not in ("family", "caregiver"):
+                continue
+            
+            family_members.append({
+                "id": row["user_id"],
+                "name": row.get("name") or row["user_id"],
+                "role": role,
+                "avatar": prefs.get("avatar", "👤"),
+                "relation": prefs.get("relation"),
+            })
+        
+        return family_members
+    except Exception as e:
+        print(f"[WARN] Failed to get family members: {e}")
+        return []
+
+
+def get_active_elders() -> List[Dict[str, Any]]:
+    """
+    Get all active elder users for scheduling and notifications.
+    Returns list of elder profiles with role='parent' or 'elder'.
+    """
+    return list_users(role="parent")
+
+
 # ==================== SESSION MANAGEMENT ====================
 
 _sessions_cache: Dict[str, str] = {}

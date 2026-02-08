@@ -120,11 +120,30 @@ export function AuthProvider({ children }) {
     }, [])
 
     // Link a family member to an elder
-    const linkToElder = useCallback((elder) => {
+    const linkToElder = useCallback(async (elder) => {
         console.log('[AuthContext] Linking to elder:', elder.id, elder.name)
         setLinkedElder(elder)
         localStorage.setItem(LINKED_ELDER_KEY, JSON.stringify(elder))
-    }, [])
+        
+        // Also save to backend if we have a current user
+        if (currentUser?.id) {
+            try {
+                const response = await fetch('http://localhost:8000/api/family/link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        family_user_id: currentUser.id,
+                        elder_id: elder.id
+                    })
+                })
+                if (response.ok) {
+                    console.log('[AuthContext] Family link saved to backend')
+                }
+            } catch (e) {
+                console.error('[AuthContext] Failed to save family link to backend:', e)
+            }
+        }
+    }, [currentUser])
 
     // Sign out - clears all auth and session state
     const signOut = useCallback(() => {

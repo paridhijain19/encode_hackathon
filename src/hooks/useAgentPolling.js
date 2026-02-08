@@ -73,7 +73,7 @@ export function useAgentPolling(interval = 5000, overrideUserId = null) {
         fetchState()
     }, [fetchState])
 
-    // Start/stop polling based on visibility
+    // Start/stop polling based on visibility and userId changes
     useEffect(() => {
         // Initial fetch
         fetchState()
@@ -96,7 +96,13 @@ export function useAgentPolling(interval = 5000, overrideUserId = null) {
             }
         }
 
+        // Handle window focus - refresh data immediately when user returns
+        const handleFocus = () => {
+            fetchState()
+        }
+
         document.addEventListener('visibilitychange', handleVisibilityChange)
+        window.addEventListener('focus', handleFocus)
 
         // Cleanup
         return () => {
@@ -104,8 +110,9 @@ export function useAgentPolling(interval = 5000, overrideUserId = null) {
                 clearInterval(intervalRef.current)
             }
             document.removeEventListener('visibilitychange', handleVisibilityChange)
+            window.removeEventListener('focus', handleFocus)
         }
-    }, [fetchState, interval])
+    }, [fetchState, interval, userId])
 
     // Computed values for convenience
     const totalExpensesToday = state.expenses

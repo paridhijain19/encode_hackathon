@@ -234,12 +234,21 @@ function FamilyDashboard() {
             setRealtimeConnected(true)
         }
         
+        // Handle window focus - refresh data immediately when user returns
+        const handleFocus = () => {
+            if (!document.hidden) {
+                loadData()
+            }
+        }
+        window.addEventListener('focus', handleFocus)
+        
         // Fallback refresh every 60 seconds (increased since we have realtime)
         const interval = setInterval(loadData, 60000)
         
         return () => {
             clearInterval(interval)
             unsubscribeAll(subscriptions)
+            window.removeEventListener('focus', handleFocus)
         }
     }, [elderId, loadData, handleRealtimeUpdate])
 
@@ -376,6 +385,22 @@ function FamilyDashboard() {
                         <p>📍 {parentData.location}</p>
                         <span className="status online">● Active</span>
                     </div>
+                    <button 
+                        className="change-elder-btn"
+                        onClick={() => setShowElderPicker(true)}
+                        title="Change parent"
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#7A7267',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            marginLeft: 'auto',
+                            opacity: 0.7
+                        }}
+                    >
+                        <ChevronRight size={18} />
+                    </button>
                 </div>
 
                 <div className="sidebar-actions">
@@ -682,7 +707,7 @@ function ChatHistory() {
 
     // Group messages by date
     const groupedChats = chatData.chat_history.reduce((groups, chat) => {
-        const dateKey = new Date(chat.timestamp).toDateString()
+        const dateKey = new Date(chat.created_at).toDateString()
         if (!groups[dateKey]) groups[dateKey] = []
         groups[dateKey].push(chat)
         return groups
@@ -731,7 +756,7 @@ function ChatHistory() {
                                     color: '#7A7267',
                                     fontWeight: '500'
                                 }}>
-                                    {formatDateHeader(chats[0].timestamp)}
+                                    {formatDateHeader(chats[0].created_at)}
                                 </span>
                             </div>
                             
@@ -765,7 +790,7 @@ function ChatHistory() {
                                                 marginTop: '4px',
                                                 marginRight: '4px'
                                             }}>
-                                                Mom • {formatTime(chat.timestamp)}
+                                                Mom • {formatTime(chat.created_at)}
                                             </span>
                                         </div>
                                     </div>

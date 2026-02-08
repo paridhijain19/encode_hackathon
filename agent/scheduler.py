@@ -23,6 +23,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Import Supabase store for user data
+from agent.supabase_store import (
+    get_active_elders,
+    get_profile,
+    get_activities,
+    get_appointments,
+    get_moods,
+)
+
 # Scheduler instance
 _scheduler = None
 _is_running = False
@@ -33,21 +42,19 @@ _is_running = False
 # ============================================================
 
 async def morning_greeting_task():
-    """Send morning greeting to all active users."""
-    from agent.db import get_db
+    """Send morning greeting to all active elder users."""
     from agent.communication import get_comm_service
     
     print(f"[Scheduler] Running morning greeting at {datetime.now()}")
     
-    db = get_db()
     comm = get_comm_service()
     
-    # Get all users with profiles
-    profiles = await db.query("user_profile")
+    # Get all active elders from Supabase
+    elders = get_active_elders()
     
-    for profile in profiles:
-        user_id = profile.get("user_id", "default_user")
-        name = profile.get("name", "there")
+    for elder in elders:
+        user_id = elder.get("id", "default_user")
+        name = elder.get("name", "there")
         
         # Send push notification
         await comm.send_push_notification(
@@ -59,33 +66,24 @@ async def morning_greeting_task():
 
 
 async def afternoon_checkin_task():
-    """Send afternoon check-in to users who haven't been active."""
-    from agent.db import get_db
+    """Send afternoon check-in to elders who haven't been active."""
     from agent.communication import get_comm_service
     
     print(f"[Scheduler] Running afternoon check-in at {datetime.now()}")
     
-    db = get_db()
     comm = get_comm_service()
     
-    # Get today's activities
-    today = datetime.now().date().isoformat()
-    activities = await db.query("activities")
+    # Get all active elders from Supabase
+    elders = get_active_elders()
     
-    # Find users with no activity today
-    users_with_activity = set()
-    for act in activities:
-        if act.get("timestamp", "").startswith(today):
-            users_with_activity.add(act.get("user_id", "default_user"))
-    
-    # Get all user profiles
-    profiles = await db.query("user_profile")
-    
-    for profile in profiles:
-        user_id = profile.get("user_id", "default_user")
-        name = profile.get("name", "there")
+    for elder in elders:
+        user_id = elder.get("id", "default_user")
+        name = elder.get("name", "there")
         
-        if user_id not in users_with_activity:
+        # Check if elder has activities today
+        today_activities = get_activities(user_id, period="today")
+        
+        if not today_activities:
             await comm.send_push_notification(
                 user_id=user_id,
                 title="Afternoon Check-in 🌤️",
@@ -96,12 +94,10 @@ async def afternoon_checkin_task():
 
 async def medication_reminder_task():
     """Send medication reminders based on scheduled times."""
-    from agent.db import get_db
     from agent.communication import get_comm_service
     
     print(f"[Scheduler] Running medication reminder at {datetime.now()}")
     
-    db = get_db()
     comm = get_comm_service()
     
     # Get medication schedules (would be in user profile or separate table)
@@ -112,11 +108,12 @@ async def medication_reminder_task():
     medication_hours = [9, 14, 20]
     
     if current_hour in medication_hours:
-        profiles = await db.query("user_profile")
+        # Get all active elders from Supabase
+        elders = get_active_elders()
         
-        for profile in profiles:
-            user_id = profile.get("user_id", "default_user")
-            name = profile.get("name", "there")
+        for elder in elders:
+            user_id = elder.get("id", "default_user")
+            name = elder.get("name", "there")
             
             await comm.send_push_notification(
                 user_id=user_id,
@@ -128,109 +125,99 @@ async def medication_reminder_task():
 
 async def appointment_reminder_task():
     """Send reminders for upcoming appointments."""
-    from agent.db import get_db
     from agent.communication import get_comm_service
     
     print(f"[Scheduler] Running appointment reminder at {datetime.now()}")
     
-    db = get_db()
     comm = get_comm_service()
     
-    # Get upcoming appointments (next 24 hours)
-    appointments = await db.query("appointments")
+    # Get all active elders and their appointments
+    elders = get_active_elders()
     now = datetime.now()
-    tomorrow = now + timedelta(days=1)
     
-    for apt in appointments:
-        if apt.get("status") == "cancelled":
-            continue
+    for elder in elders:
+        user_id = elder.get("id", "default_user")
+        appointments = get_appointments(user_id, upcoming_only=True)
         
-        try:
-            apt_time = datetime.fromisoformat(apt.get("date_time", "").replace(" ", "T"))
-            
-            # Remind 1 day before
-            if now.date() == (apt_time.date() - timedelta(days=1)):
-                user_id = apt.get("user_id", "default_user")
+        for apt in appointments:
+            try:
+                # Combine date and time for comparison
+                apt_date = apt.get("date", "")
+                apt_time = apt.get("time", "00:00")
+                if apt_date:
+                    apt_datetime = datetime.fromisoformat(f"{apt_date}T{apt_time}")
+                else:
+                    continue
                 
-                await comm.send_push_notification(
-                    user_id=user_id,
-                    title="Appointment Tomorrow 📅",
-                    message=f"Reminder: {apt.get('title', 'Appointment')} tomorrow at {apt_time.strftime('%I:%M %p')}",
-                    data={"type": "appointment_reminder", "appointment_id": apt.get("id")}
-                )
-            
-            # Remind 2 hours before
-            elif apt_time - now <= timedelta(hours=2) and apt_time > now:
-                user_id = apt.get("user_id", "default_user")
+                # Remind 1 day before
+                if now.date() == (apt_datetime.date() - timedelta(days=1)):
+                    await comm.send_push_notification(
+                        user_id=user_id,
+                        title="Appointment Tomorrow 📅",
+                        message=f"Reminder: {apt.get('title', 'Appointment')} tomorrow at {apt_datetime.strftime('%I:%M %p')}",
+                        data={"type": "appointment_reminder", "appointment_id": apt.get("id")}
+                    )
                 
-                await comm.send_push_notification(
-                    user_id=user_id,
-                    title="Appointment Soon! ⏰",
-                    message=f"{apt.get('title', 'Appointment')} in 2 hours at {apt.get('location', 'scheduled location')}",
-                    data={"type": "appointment_reminder", "appointment_id": apt.get("id"), "urgent": True}
-                )
-        except Exception as e:
-            print(f"[Scheduler] Error processing appointment: {e}")
+                # Remind 2 hours before
+                elif apt_datetime - now <= timedelta(hours=2) and apt_datetime > now:
+                    await comm.send_push_notification(
+                        user_id=user_id,
+                        title="Appointment Soon! ⏰",
+                        message=f"{apt.get('title', 'Appointment')} in 2 hours at {apt.get('location', 'scheduled location')}",
+                        data={"type": "appointment_reminder", "appointment_id": apt.get("id"), "urgent": True}
+                    )
+            except Exception as e:
+                print(f"[Scheduler] Error processing appointment: {e}")
 
 
 async def inactivity_check_task():
-    """Check for user inactivity and alert family if needed."""
-    from agent.db import get_db
+    """Check for elder inactivity and alert family if needed."""
     from agent.communication import get_comm_service
     
     print(f"[Scheduler] Running inactivity check at {datetime.now()}")
     
-    db = get_db()
     comm = get_comm_service()
     
-    # Get all activities
-    activities = await db.query("activities", order_by="-timestamp")
-    
-    # Group by user and find last activity
-    user_last_activity: Dict[str, datetime] = {}
-    for act in activities:
-        user_id = act.get("user_id", "default_user")
-        if user_id not in user_last_activity:
-            try:
-                user_last_activity[user_id] = datetime.fromisoformat(act.get("timestamp", ""))
-            except:
-                pass
-    
+    # Get all active elders
+    elders = get_active_elders()
     now = datetime.now()
     inactivity_threshold = timedelta(hours=4)
     critical_threshold = timedelta(hours=24)
     
-    profiles = await db.query("user_profile")
-    
-    for profile in profiles:
-        user_id = profile.get("user_id", "default_user")
-        name = profile.get("name", "User")
-        last_activity = user_last_activity.get(user_id)
+    for elder in elders:
+        user_id = elder.get("id", "default_user")
+        name = elder.get("name", "User")
         
-        if last_activity:
-            time_since = now - last_activity
-            
-            if time_since >= critical_threshold:
-                # Critical: No activity in 24+ hours
-                await comm.send_family_alert(
-                    elder_user_id=user_id,
-                    message=f"⚠️ {name} has not logged any activity in over 24 hours. Please check in.",
-                    urgency="critical",
-                    category="inactivity"
-                )
-            elif time_since >= inactivity_threshold:
-                # Gentle check-in after 4 hours
-                await comm.send_push_notification(
-                    user_id=user_id,
-                    title="Just Checking In 💚",
-                    message=f"Hi {name}! It's been a while. Everything okay?",
-                    data={"type": "inactivity_check", "action": "respond"}
-                )
+        # Get recent activities for this elder
+        activities = get_activities(user_id, period="week", limit=1)
+        
+        if activities:
+            try:
+                last_activity_time = datetime.fromisoformat(activities[0].get("timestamp", "").replace("Z", "+00:00").replace("+00:00", ""))
+                time_since = now - last_activity_time
+                
+                if time_since >= critical_threshold:
+                    # Critical: No activity in 24+ hours
+                    await comm.send_family_alert(
+                        elder_user_id=user_id,
+                        message=f"⚠️ {name} has not logged any activity in over 24 hours. Please check in.",
+                        urgency="critical",
+                        category="inactivity"
+                    )
+                elif time_since >= inactivity_threshold:
+                    # Gentle check-in after 4 hours
+                    await comm.send_push_notification(
+                        user_id=user_id,
+                        title="Just Checking In 💚",
+                        message=f"Hi {name}! It's been a while. Everything okay?",
+                        data={"type": "inactivity_check", "action": "respond"}
+                    )
+            except Exception as e:
+                print(f"[Scheduler] Error parsing activity timestamp for {user_id}: {e}")
 
 
 async def wellness_analysis_task():
     """Run weekly wellness analysis and send summary to family."""
-    from agent.db import get_db
     from agent.communication import get_comm_service
     
     print(f"[Scheduler] Running wellness analysis at {datetime.now()}")
@@ -239,29 +226,23 @@ async def wellness_analysis_task():
     if datetime.now().weekday() != 6:
         return
     
-    db = get_db()
     comm = get_comm_service()
     
-    # Get last 7 days of data
-    week_ago = datetime.now() - timedelta(days=7)
+    # Get all active elders
+    elders = get_active_elders()
     
-    moods = await db.query("moods")
-    activities = await db.query("activities")
-    
-    # Filter to last week
-    recent_moods = [m for m in moods if datetime.fromisoformat(m.get("timestamp", "2000-01-01")) >= week_ago]
-    recent_activities = [a for a in activities if datetime.fromisoformat(a.get("timestamp", "2000-01-01")) >= week_ago]
-    
-    # Analyze
-    positive_moods = sum(1 for m in recent_moods if m.get("mood") in ["happy", "content", "energetic", "grateful"])
-    negative_moods = sum(1 for m in recent_moods if m.get("mood") in ["sad", "anxious", "lonely", "tired"])
-    total_activity_mins = sum(a.get("duration_minutes", 0) for a in recent_activities)
-    
-    profiles = await db.query("user_profile")
-    
-    for profile in profiles:
-        user_id = profile.get("user_id", "default_user")
-        name = profile.get("name", "User")
+    for elder in elders:
+        user_id = elder.get("id", "default_user")
+        name = elder.get("name", "User")
+        
+        # Get last week's data for this elder
+        moods = get_moods(user_id, period="week")
+        activities = get_activities(user_id, period="week")
+        
+        # Analyze mood trends
+        positive_moods = sum(1 for m in moods if m.get("rating", "").lower() in ["happy", "content", "energetic", "grateful", "good", "great"])
+        negative_moods = sum(1 for m in moods if m.get("rating", "").lower() in ["sad", "anxious", "lonely", "tired", "bad"])
+        total_activity_mins = sum(a.get("duration_minutes", 0) or 0 for a in activities)
         
         # Generate insights
         mood_trend = "positive" if positive_moods > negative_moods else "could use some attention"
@@ -270,7 +251,7 @@ async def wellness_analysis_task():
         message = f"Weekly wellness summary for {name}:\n"
         message += f"• Mood trend: {mood_trend}\n"
         message += f"• Activity: {total_activity_mins} minutes ({activity_level})\n"
-        message += f"• {len(recent_activities)} activities logged"
+        message += f"• {len(activities)} activities logged"
         
         # Alert family with low urgency summary
         await comm.send_family_alert(
