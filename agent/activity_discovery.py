@@ -18,18 +18,20 @@ load_dotenv()
 class ActivityDiscoveryService:
     """
     Service for discovering local activities and events.
-    Uses Google Custom Search API or falls back to curated suggestions.
+    Uses Google Custom Search API with fallback keys or falls back to curated suggestions.
     """
     
     def __init__(self):
-        self.google_api_key = os.getenv("GOOGLE_API_KEY")
+        from agent.api_key_manager import get_google_api_key
+        
+        self.google_api_key = get_google_api_key()  # Use key manager for fallback support
         self.google_search_cx = os.getenv("GOOGLE_SEARCH_CX")  # Custom Search Engine ID
         self.has_search = bool(self.google_api_key and self.google_search_cx)
         
         if self.has_search:
-            print("[Activity Discovery] Google Search API configured")
+            print("[Activity Discovery] Google Search API configured with key manager")
         else:
-            print("[Activity Discovery] Using curated suggestions (no Google API)")
+            print("[Activity Discovery] Using curated suggestions (no Google API or keys exhausted)")
     
     async def search_local_events(
         self,

@@ -33,9 +33,16 @@ console = Console()
 # Load environment variables
 load_dotenv()
 
-# Verify API key is set
-if not os.getenv("GOOGLE_API_KEY"):
-    raise ValueError("GOOGLE_API_KEY not found in environment variables. Please set it in .env file.")
+# Import API key manager for fallback support
+from agent.api_key_manager import get_google_api_key
+
+# Verify API key is available
+google_key = get_google_api_key()
+if not google_key:
+    raise ValueError("No Google API keys found. Please set GOOGLE_API_KEY or GOOGLE_API_KEY_1, GOOGLE_API_KEY_2, etc. in .env file.")
+
+# Set the key in environment for Google ADK to use
+os.environ["GOOGLE_API_KEY"] = google_key
 
 # Remove GEMINI_API_KEY if both are set to avoid warnings
 if os.getenv("GOOGLE_API_KEY") and os.getenv("GEMINI_API_KEY"):

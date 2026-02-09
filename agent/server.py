@@ -386,7 +386,7 @@ async def get_or_create_session(user_id: str, requested_session_id: Optional[str
 
 async def run_agent(user_id: str, session_id: str, message: str, memory_context: str = "") -> str:
     """
-    Run agent and collect response text.
+    Run agent and collect response text with API key fallback support.
     
     Args:
         user_id: User identifier
@@ -399,6 +399,13 @@ async def run_agent(user_id: str, session_id: str, message: str, memory_context:
     """
     global runner
     
+    from agent.api_key_manager import (
+        get_google_api_key, 
+        mark_google_key_exhausted,
+        is_quota_error, 
+        is_auth_error
+    )
+    
     # Prepend memory context to the message if available
     # This allows the agent to see relevant past memories
     full_message = memory_context + message if memory_context else message
@@ -408,26 +415,72 @@ async def run_agent(user_id: str, session_id: str, message: str, memory_context:
         parts=[types.Part(text=full_message)]
     )
     
-    response_parts = []
-    
-    async for event in runner.run_async(
-        user_id=user_id,
-        session_id=session_id,
-        new_message=content
-    ):
-        # Extract text from content events
-        if hasattr(event, "content") and event.content:
-            if not event.content.parts:
-                continue
+    # Retry with different API keys on quota exhaustion
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response_parts = []
             
-            for part in event.content.parts:
-                if hasattr(part, "text") and part.text:
-                    # Only collect responses from the root agent
-                    author = getattr(event, "author", "")
-                    if author == "amble_text":
-                        response_parts.append(part.text)
+            async for event in runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=content
+            ):
+                # Extract text from content events
+                if hasattr(event, "content") and event.content:
+                    if not event.content.parts:
+                        continue
+                    
+                    for part in event.content.parts:
+                        if hasattr(part, "text") and part.text:
+                            # Only collect responses from the root agent
+                            author = getattr(event, "author", "")
+                            if author == "amble_text":
+                                response_parts.append(part.text)
+            
+            return "".join(response_parts) if response_parts else "I'm sorry, I couldn't process that request."
+            
+        except Exception as e:
+            current_key = os.getenv("GOOGLE_API_KEY")
+            
+            if is_quota_error(e):
+                print(f"[AGENT] Quota exhausted for Google API key (attempt {attempt + 1}/{max_retries}): {e}")
+                if current_key:
+                    mark_google_key_exhausted(current_key, "quota_exceeded")
+                
+                # Try to get a new key for next attempt
+                if attempt < max_retries - 1:
+                    new_key = get_google_api_key()
+                    if new_key:
+                        os.environ["GOOGLE_API_KEY"] = new_key
+                        print(f"[AGENT] Switched to new Google API key for retry")
+                        continue
+                    else:
+                        print(f"[AGENT] No more Google API keys available")
+                        break
+            
+            elif is_auth_error(e):
+                print(f"[AGENT] Authentication error with Google API key: {e}")
+                if current_key:
+                    mark_google_key_exhausted(current_key, "auth_error")
+                
+                # Try to get a new key for next attempt
+                if attempt < max_retries - 1:
+                    new_key = get_google_api_key()
+                    if new_key:
+                        os.environ["GOOGLE_API_KEY"] = new_key
+                        print(f"[AGENT] Switched to new Google API key after auth error")
+                        continue
+                    else:
+                        print(f"[AGENT] No more Google API keys available")
+                        break
+            else:
+                # Other error, don't retry
+                print(f"[AGENT] Non-quota error: {e}")
+                raise e
     
-    return "".join(response_parts) if response_parts else "I'm sorry, I couldn't process that request."
+    # All retries exhausted
+    return "I'm experiencing high demand right now. Please try again in a few minutes."
 
 
 # ==================== ENDPOINTS ====================
@@ -436,6 +489,22 @@ async def run_agent(user_id: str, session_id: str, message: str, memory_context:
 async def health():
     """Health check endpoint."""
     return {"status": "ok", "agent": "amble"}
+
+
+@app.get("/api/keys/status")
+async def get_api_key_status():
+    """
+    Get status of all API keys (for monitoring).
+    Returns count of available, exhausted, and cooling down keys.
+    """
+    from agent.api_key_manager import api_key_manager
+    
+    status = api_key_manager.get_status()
+    return {
+        "status": "ok",
+        "api_keys": status,
+        "last_updated": time.time()
+    }
 
 
 # ==================== ANAM AI SESSION ENDPOINT ====================
@@ -453,48 +522,105 @@ async def get_anam_session(request: AnamSessionRequest):
     Get Anam AI session token for video avatar with audio passthrough.
     
     This enables ElevenLabs audio to be sent to Anam for lip-sync.
+    Includes automatic fallback to additional Anam API keys on quota exhaustion.
     """
-    anam_api_key = os.getenv("ANAM_API_KEY")
+    from agent.api_key_manager import (
+        get_anam_api_key, 
+        mark_anam_key_exhausted,
+        is_quota_error, 
+        is_auth_error
+    )
+    
+    anam_api_key = get_anam_api_key()
     
     if not anam_api_key:
         raise HTTPException(
             status_code=400,
-            detail="ANAM_API_KEY not configured. Add it to .env for video avatar."
+            detail="No Anam API keys available. Add ANAM_API_KEY or ANAM_API_KEY_1, ANAM_API_KEY_2, etc. to .env"
         )
     
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.anam.ai/v1/auth/session-token",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {anam_api_key}",
-                },
-                json={
-                    "personaConfig": {
-                        "avatarId": request.avatar_id,
-                        "enableAudioPassthrough": True,  # For ElevenLabs audio
-                    }
-                },
-                timeout=10.0
-            )
-            
-            if response.status_code != 200:
-                print(f"[Anam] API Error: {response.text}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Anam API error: {response.text}"
+    # Retry with different API keys on quota exhaustion
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://api.anam.ai/v1/auth/session-token",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {anam_api_key}",
+                    },
+                    json={
+                        "personaConfig": {
+                            "avatarId": request.avatar_id,
+                            "enableAudioPassthrough": True,  # For ElevenLabs audio
+                        }
+                    },
+                    timeout=10.0
                 )
-            
-            data = response.json()
-            print(f"[Anam] API Response: {data}")
-            return {
-                "sessionToken": data.get("sessionToken"),
-                "avatarId": request.avatar_id
-            }
-            
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Anam API timeout")
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    print(f"[Anam] API Response success with key {attempt + 1}")
+                    return {
+                        "sessionToken": data.get("sessionToken"),
+                        "avatarId": request.avatar_id
+                    }
+                elif response.status_code in [429, 503]:
+                    # Rate limit or service unavailable - try next key
+                    print(f"[Anam] Rate limited (attempt {attempt + 1}/{max_retries}): {response.text}")
+                    mark_anam_key_exhausted(anam_api_key, f"rate_limit_{response.status_code}")
+                    
+                    if attempt < max_retries - 1:
+                        anam_api_key = get_anam_api_key()
+                        if not anam_api_key:
+                            break
+                        print(f"[Anam] Switched to new API key for retry")
+                        continue
+                elif response.status_code in [401, 403]:
+                    # Auth error - try next key
+                    print(f"[Anam] Auth error (attempt {attempt + 1}/{max_retries}): {response.text}")
+                    mark_anam_key_exhausted(anam_api_key, f"auth_error_{response.status_code}")
+                    
+                    if attempt < max_retries - 1:
+                        anam_api_key = get_anam_api_key()
+                        if not anam_api_key:
+                            break
+                        print(f"[Anam] Switched to new API key after auth error")
+                        continue
+                else:
+                    # Other error, don't retry
+                    print(f"[Anam] API Error: {response.text}")
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"Anam API error: {response.text}"
+                    )
+                
+        except httpx.TimeoutException:
+            print(f"[Anam] Timeout (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1:
+                continue
+            else:
+                raise HTTPException(status_code=504, detail="Anam API timeout after retries")
+        except Exception as e:
+            if is_quota_error(e) or is_auth_error(e):
+                print(f"[Anam] API key exhausted (attempt {attempt + 1}/{max_retries}): {e}")
+                mark_anam_key_exhausted(anam_api_key, str(e))
+                
+                if attempt < max_retries - 1:
+                    anam_api_key = get_anam_api_key()
+                    if not anam_api_key:
+                        break
+                    print(f"[Anam] Switched to new API key for retry")
+                    continue
+            else:
+                raise e
+    
+    # All retries exhausted
+    raise HTTPException(
+        status_code=503, 
+        detail="All Anam API keys exhausted. Please try again later."
+    )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
