@@ -30,6 +30,7 @@ class APIKeyManager:
         manager = APIKeyManager()
         google_key = manager.get_key('google')  # Returns next available Google key
         anam_key = manager.get_key('anam')      # Returns next available Anam key
+        elevenlabs_key = manager.get_key('elevenlabs')  # Returns next available ElevenLabs key
         
         # Mark key as exhausted (will skip it for some time)
         manager.mark_exhausted('google', google_key)
@@ -38,6 +39,7 @@ class APIKeyManager:
     def __init__(self):
         self.google_keys = self._load_keys('GOOGLE_API_KEY')
         self.anam_keys = self._load_keys('ANAM_API_KEY')
+        self.elevenlabs_keys = self._load_keys('ELEVENLABS_API_KEY')
         
         # Track exhausted keys with timestamp
         self.exhausted_keys: Dict[str, Dict[str, float]] = defaultdict(dict)
@@ -45,13 +47,14 @@ class APIKeyManager:
         # Current key indices
         self.current_indices = {
             'google': 0,
-            'anam': 0
+            'anam': 0,
+            'elevenlabs': 0
         }
         
         # Cooldown period in seconds (1 hour)
         self.cooldown_period = 3600
         
-        logger.info(f"[APIKeyManager] Loaded {len(self.google_keys)} Google keys, {len(self.anam_keys)} Anam keys")
+        logger.info(f"[APIKeyManager] Loaded {len(self.google_keys)} Google keys, {len(self.anam_keys)} Anam keys, {len(self.elevenlabs_keys)} ElevenLabs keys")
     
     def _load_keys(self, base_name: str) -> List[str]:
         """Load API keys from environment variables."""
@@ -95,7 +98,7 @@ class APIKeyManager:
         Get next available API key for the given type.
         
         Args:
-            key_type: 'google' or 'anam'
+            key_type: 'google', 'anam', or 'elevenlabs'
             
         Returns:
             API key string or None if no keys available
@@ -104,6 +107,8 @@ class APIKeyManager:
             keys = self.google_keys
         elif key_type == 'anam':
             keys = self.anam_keys
+        elif key_type == 'elevenlabs':
+            keys = self.elevenlabs_keys
         else:
             logger.error(f"[APIKeyManager] Unknown key type: {key_type}")
             return None
@@ -147,6 +152,9 @@ class APIKeyManager:
         elif key_type == 'anam':
             available = sum(1 for k in self.anam_keys if self._is_key_available(key_type, k))
             logger.info(f"[APIKeyManager] {available}/{len(self.anam_keys)} Anam keys still available")
+        elif key_type == 'elevenlabs':
+            available = sum(1 for k in self.elevenlabs_keys if self._is_key_available(key_type, k))
+            logger.info(f"[APIKeyManager] {available}/{len(self.elevenlabs_keys)} ElevenLabs keys still available")
     
     def get_status(self) -> Dict[str, Any]:
         """Get current status of all keys."""
@@ -176,7 +184,8 @@ class APIKeyManager:
         
         return {
             'google': key_status('google', self.google_keys),
-            'anam': key_status('anam', self.anam_keys)
+            'anam': key_status('anam', self.anam_keys),
+            'elevenlabs': key_status('elevenlabs', self.elevenlabs_keys)
         }
 
 
@@ -235,6 +244,11 @@ def get_anam_api_key() -> Optional[str]:
     return api_key_manager.get_key('anam')
 
 
+def get_elevenlabs_api_key() -> Optional[str]:
+    """Get next available ElevenLabs API key."""
+    return api_key_manager.get_key('elevenlabs')
+
+
 def mark_google_key_exhausted(key: str, reason: str = "quota_exceeded"):
     """Mark a Google API key as exhausted."""
     api_key_manager.mark_exhausted('google', key, reason)
@@ -243,3 +257,8 @@ def mark_google_key_exhausted(key: str, reason: str = "quota_exceeded"):
 def mark_anam_key_exhausted(key: str, reason: str = "quota_exceeded"):
     """Mark an Anam API key as exhausted."""
     api_key_manager.mark_exhausted('anam', key, reason)
+
+
+def mark_elevenlabs_key_exhausted(key: str, reason: str = "quota_exceeded"):
+    """Mark an ElevenLabs API key as exhausted."""
+    api_key_manager.mark_exhausted('elevenlabs', key, reason)
