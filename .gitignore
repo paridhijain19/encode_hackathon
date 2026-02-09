@@ -104,6 +104,13 @@ docs/
 .render/
 .netlify/
 
+# Deployment config files (not needed for Vercel)
+Dockerfile
+fly.toml
+.env.production.template
+docker-compose.yml
+render.yaml
+
 # ==================== Testing ====================
 coverage/
 .nyc_output/
