@@ -8,7 +8,7 @@ from google.adk.agents.callback_context import CallbackContext
 from google.adk.memory import InMemoryMemoryService
 from google.adk.tools.google_search_tool import google_search
 from google.adk.tools.agent_tool import AgentTool
-from opik.integrations.adk import OpikTracer, track_adk_agent_recursive
+from opik.integrations.adk import OpikTracer
 
 # Import local modules
 from agent.tools import (
@@ -18,16 +18,16 @@ from agent.tools import (
     # Expense tracking
     track_expense,
     get_expense_summary,
-    analyze_spending_patterns,  # FIXED: Added unused tool
+    analyze_spending_patterns,  
     # Mood tracking
     track_mood,
     get_mood_history,
-    get_mood_based_suggestions,  # FIXED: Added unused tool
+    get_mood_based_suggestions,  
     # Activity tracking
     record_activity,
     get_activity_history,
-    suggest_daily_activity,  # FIXED: Added unused tool
-    search_local_activities,  # FIXED: Added unused tool
+    suggest_daily_activity,  
+    search_local_activities,  
     # Appointments
     schedule_appointment,
     get_upcoming_appointments,
@@ -50,12 +50,7 @@ from agent.tools import (
 )
 
 from agent.prompts import (
-    ROOT_AGENT_INSTRUCTION,
-    MOOD_AGENT_INSTRUCTION,
-    ACTIVITY_AGENT_INSTRUCTION,
-    EXPENSE_AGENT_INSTRUCTION,
-    APPOINTMENT_AGENT_INSTRUCTION,
-    WELLNESS_AGENT_INSTRUCTION,
+    ROOT_AGENT_INSTRUCTION
 )
 
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -69,18 +64,7 @@ MODEL_REASONING = "gemini-2.5-flash"
 
 import json
 
-# Path to the default persona profile
-PERSONA_PROFILE_PATH = os.path.join(os.path.dirname(__file__), "profiles", "default_persona.json")
 
-def _load_persona_profile():
-    """Loads the default persona profile from JSON file."""
-    if os.path.exists(PERSONA_PROFILE_PATH):
-        try:
-            with open(PERSONA_PROFILE_PATH, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            pass
-    return {}
 
 def initialize_user_context(callback_context: CallbackContext):
     """
@@ -124,21 +108,7 @@ def initialize_user_context(callback_context: CallbackContext):
     
     # Try loading from Supabase first
     profile = get_profile(user_id)
-    
-    # If no profile in Supabase, load from default persona
-    if not profile:
-        persona_data = _load_persona_profile()
-        if persona_data and "state" in persona_data:
-            persona_profile = persona_data["state"].get("user_profile", {})
-            if persona_profile:
-                # Save to Supabase for persistence
-                save_profile(user_id, {
-                    "name": persona_profile.get("name", "Friend"),
-                    "location": persona_profile.get("location", "Mumbai, India"),
-                    "age": persona_profile.get("age", 65),
-                    "interests": persona_profile.get("interests", [])
-                })
-                profile = persona_profile
+
     
     # Set user state with user: prefix for cross-session persistence
     if profile:
@@ -203,127 +173,6 @@ OPIK_CALLBACKS = {
     "after_tool_callback": opik_tracer.after_tool_callback,
 }
 
-# ==================== SUB-AGENTS ====================
-# ⚠️ ARCHITECTURE DECISION: Flattened Agent Architecture
-# 
-# Sub-agents are intentionally commented out due to Google ADK limitations:
-# - ADK cannot mix custom function tools with built-in Google tools (like google_search)
-# - Error: "Tool use with function calling is unsupported"
-# 
-# SOLUTION: Use a single root_agent with all tools directly attached
-# - Benefit: All tools work together seamlessly
-# - Trade-off: Less modular, but more reliable
-# 
-# If you need to re-enable sub-agents in the future:
-# 1. Ensure no sub-agent mixes custom tools with Google Search
-# 2. Use AgentTool wrapper for any agent using Google Search (see search_agent example)
-# 3. Test thoroughly with ADK's function calling behavior
-
-# # Mood & Emotional Wellness Agent
-# mood_agent = LlmAgent(
-#     name="mood_agent",
-#     model=MODEL_STANDARD,
-#     description="Handles emotional conversations, mood tracking, and wellness check-ins",
-#     instruction=MOOD_AGENT_INSTRUCTION,
-#     tools=[track_mood, get_mood_history],
-#     output_key="mood_response",
-#     disallow_transfer_to_peers=True,
-#     **OPIK_CALLBACKS
-# )
-
-# # Activity Tracking & Suggestions Agent
-# activity_agent = LlmAgent(
-#     name="activity_agent",
-#     model=MODEL_STANDARD,
-#     description="Tracks daily activities, suggests activities, and finds local events",
-#     instruction=ACTIVITY_AGENT_INSTRUCTION,
-#     tools=[
-#         record_activity, 
-#         get_activity_history, 
-#         get_activity_suggestions,
-#         google_search,  # For finding local events
-#     ],
-#     output_key="activity_response",
-#     disallow_transfer_to_peers=True,
-#     **OPIK_CALLBACKS
-# )
-
-# # Expense Tracking Agent
-# expense_agent = LlmAgent(
-#     name="expense_agent",
-#     model=MODEL_STANDARD,
-#     description="Helps track and summarize daily expenses",
-#     instruction=EXPENSE_AGENT_INSTRUCTION,
-#     tools=[track_expense, get_expense_summary],
-#     output_key="expense_response",
-#     disallow_transfer_to_peers=True,
-#     **OPIK_CALLBACKS
-# )
-
-# # Appointment Management Agent
-# appointment_agent = LlmAgent(
-#     name="appointment_agent",
-#     model=MODEL_STANDARD,
-#     description="Manages healthcare and personal appointments",
-#     instruction=APPOINTMENT_AGENT_INSTRUCTION,
-#     tools=[schedule_appointment, get_upcoming_appointments, cancel_appointment],
-#     output_key="appointment_response",
-#     disallow_transfer_to_peers=True,
-#     **OPIK_CALLBACKS
-# )
-
-# # Wellness Pattern Analysis Agent
-# wellness_agent = LlmAgent(
-#     name="wellness_agent",
-#     model=MODEL_REASONING,
-#     description="Analyzes patterns, detects concerns, and manages family alerts",
-#     instruction=WELLNESS_AGENT_INSTRUCTION,
-#     tools=[
-#         analyze_wellness_patterns,
-#         send_family_alert,
-#         get_family_alerts_history,
-#         get_mood_history,
-#         get_activity_history,
-#     ],
-#     output_key="wellness_response",
-#     disallow_transfer_to_peers=True,
-#     **OPIK_CALLBACKS
-# )
-
-# # Local Events & Trending Activities Agent  
-# local_events_agent = LlmAgent(
-#     name="local_events_agent",
-#     model=MODEL_STANDARD,
-#     description="Searches for local events, trending activities, and things to do in the user's city",
-#     instruction="""
-#     You help find local events and activities for elderly users.
-#     
-#     When searching:
-#     1. Use Google Search to find senior-friendly events in their area
-#     2. Look for cultural events, community gatherings, walking groups, hobby classes
-#     3. Search for trending activities and popular destinations
-#     4. Consider accessibility and timing
-#     
-#     User Location: {user:location}
-#     User Interests: {user:interests}
-#     
-#     Format results clearly with event name, location, timing, and brief description.
-#     Focus on activities suitable for seniors (50+).
-#     """,
-#     tools=[google_search],
-#     output_key="events_response",
-#     disallow_transfer_to_peers=True,
-#     **OPIK_CALLBACKS
-# )
-
-
-# ==================== SEARCH AGENT (ISOLATED) ====================
-# NOTE: google_search is a built-in Gemini tool that CANNOT be mixed with
-# custom function tools in the same agent. This causes:
-#   "400 INVALID_ARGUMENT: Tool use with function calling is unsupported"
-#
-# SOLUTION: Wrap google_search in a separate LlmAgent, then expose it to
-# root_agent via AgentTool. This creates a clean boundary that ADK can handle.
 
 search_agent = LlmAgent(
     name="search_agent",

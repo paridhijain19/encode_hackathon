@@ -1,20 +1,35 @@
 # Amble - Elder Care and Connection Agent
 
-Amble is a web application designed to help elderly parents live independently while keeping their adult children connected and informed.
+Amble helps elderly individuals (50+) maintain healthy routines and stay connected with family through an intelligent AI companion. For seniors, it offers voice-first interactions for tracking expenses, discovering local activities, managing health reminders, and connecting with loved ones, no complex tech required. For their families living far away, it provides a peace-of-mind dashboard with wellness insights and smart alerts. Unlike simple reminder apps, Amble's AI agents learn and adapt understanding conversational English, proactively discovering relevant activities, detecting concerning patterns, and coordinating family communication. Built for the global context where elderly parents increasingly live independently while children work in different cities, Amble transforms isolation into connection and worry into assurance.
+
+## AI Agent & Capabilities
+
+Amble is powered by an intelligent AI companion that understands context, remembers conversations, and proactively helps seniors maintain independence and wellness.
+
+### Core AI Capabilities
+
+**Conversational Intelligence**: Processes natural English, understands user intent, and provides empathetic, culturally-aware responses. Adapts communication style based on user preferences.
+
+**Long-Term Memory & Learning**: Uses Mem0 for semantic memory to remember past conversations, personal details, and behavioral patterns. Maintains context across sessions for continuous personalization.
+
+**Proactive Discovery**: Searches for local events and activities, provides intelligent recommendations based on time, interests, and preferences. Integrates web search through an isolated search agent architecture.
+
+**Pattern Detection & Wellness Analysis**: Detects concerning changes in mood, activity levels, and routines. Identifies unusual spending patterns and monitors wellness trends. Generates smart alerts to family only when truly relevant.
+
+**Multi-Modal Tool Integration**: Orchestrates expense tracking, activity logging, mood monitoring, appointment management, family connections, and local discovery through natural conversation.
+
+### AI Architecture
+
+- **Root Agent**: Main conversational agent with comprehensive tool access
+- **Search Agent**: Isolated agent for web search (ensures stability with Gemini ADK)
+- **Memory Integration**: Mem0 for semantic memory storage and retrieval
+- **Observability**: Comet Opik for distributed tracing and performance metrics
 
 ## Features
 
-### For Elderly Parents
-- Voice-Based Budget Management: Record expenses through voice commands.
-- Activity Discovery: Find local groups and events.
-- Health Reminders: Schedules for medicine and appointments.
-- Family Connection: Simple controls for calling and sharing photos.
+**For Elderly Parents**: Voice-first budget management, AI-powered activity discovery, smart health reminders, family connection tools, and a conversational interface requiring no complex tech.
 
-### For Adult Children
-- Live Activity Feed: Monitor daily activities and events.
-- Spending Insights: Track how funds are being used.
-- Smart Alerts: Receive notifications for important updates.
-- Family Coordination: Manage visits and responsibilities with siblings.
+**For Adult Children**: Live activity feed, AI-generated spending insights, smart alerts for important updates, wellness dashboard with pattern analysis, and family coordination tools.
 
 ## Getting Started
 
@@ -31,66 +46,22 @@ Amble is a web application designed to help elderly parents live independently w
    - Parent Portal: http://localhost:5173/parent
    - Family Dashboard: http://localhost:5173/family
 
-## Project Structure
-- src/pages: Application screens (Landing, Parent Portal, Family Dashboard).
-- src/components: Reusable UI components.
-- src/index.css: Core design system and global styles.
-
 ## Technical Stack
-- React 18: UI development.
-- React Router: Navigation.
-- Vite: Build tool.
-- Lucide React: Icons.
-- CSS: Styling with variables for consistent design.
 
-## Future Plans
-- Voice Recognition Integration using Web Speech API.
-- Real-time notifications for alerts.
-- Video calling integration.
+**Frontend**: React 18, React Router, Vite, Lucide React, CSS
 
----
+**AI & Backend**: Google ADK (Agent Development Kit), Gemini Models, Mem0 (semantic memory), Comet Opik (observability), Supabase (database), FastAPI/Uvicorn, Python
 
-## 🧠 Memory System (Mem0 Integration)
+## AI Memory System (Mem0 Integration)
 
-Amble uses **Mem0** for long-term semantic memory, allowing the agent to remember users across sessions.
+The AI agent uses Mem0 for long-term semantic memory. After each conversation, messages are saved to Mem0. Before each agent invocation, the system performs semantic search to find the top 5 most relevant past memories, which are injected into the agent context. This enables conversational continuity, personalization, and contextual understanding across sessions.
 
-### How It Works
-1. **Store**: After each conversation turn, both user message and agent response are saved to Mem0 with `user_id` scope.
-2. **Retrieve**: Before each agent invocation, the system performs a semantic search to find the top 5 most relevant past memories.
-3. **Inject**: Retrieved memories are prepended to the agent context, giving the agent awareness of past conversations.
 
-### Why This Matters
-- **Continuity**: Seniors don't need to repeat themselves ("My daughter lives in Pune").
-- **Personalization**: The agent learns preferences, health conditions, and family details over time.
-- **Measurable**: Memory hits are logged via Opik for evaluation.
+## AI Observability (Opik Integration)
 
-### Environment Variables
-```bash
-MEM0_API_KEY=your_mem0_api_key
-```
+The AI agent's performance is monitored using Comet Opik for distributed tracing and metrics. Tracked metrics include memory hits, response length, and user message length. 
 
----
-
-## 🔍 Observability (Opik Integration)
-
-Amble uses **Comet Opik** for distributed tracing and metrics.
-
-### Tracked Metrics
-| Metric | Description |
-|--------|-------------|
-| `memory_hits` | Number of memories retrieved for context |
-| `has_memory` | Binary flag (1 if memories were found) |
-| `response_length` | Length of agent response |
-| `user_message_length` | Length of user input |
-
-### Viewing Traces
-Traces are automatically sent to Comet Opik. View them at:
-- Project: `amble-companion`
-- Dashboard: https://www.comet.com/opik
-
----
-
-## 🚀 Backend API
+## Backend API
 
 ### Running the Server
 ```bash
@@ -106,7 +77,9 @@ uvicorn agent.server:app --reload --port 8000
 GET /
 ```
 
-#### Chat
+#### AI Chat Endpoint
+Interact with the AI companion agent:
+
 ```bash
 POST /chat
 Content-Type: application/json
@@ -128,10 +101,11 @@ Response:
 }
 ```
 
+The AI agent automatically retrieves relevant memories, understands natural language intent, selects appropriate tools, provides empathetic responses, and saves conversation context.
+
 ### Search Architecture
 
-Due to limitations in Gemini’s tool-calling system, web search is implemented as an isolated agent wrapped using AgentTool.  
-This ensures stability while allowing the main reasoning agent to remain deterministic and memory-safe.
+Web search is implemented as an isolated AI agent wrapped using AgentTool, ensuring stability while allowing the main reasoning agent to remain deterministic and memory-safe. This prevents conflicts between Google's built-in search tools and custom function tools.
 
 
 ---
