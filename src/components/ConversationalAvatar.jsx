@@ -78,7 +78,8 @@ export default function ConversationalAvatar({
             console.log('[Anam] Fetching session token...')
             setAnamStatus('loading')
 
-            const res = await fetch('http://localhost:8000/api/anam/session', {
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+            const res = await fetch(`${apiBase}/api/anam/session`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({})

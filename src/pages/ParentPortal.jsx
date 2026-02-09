@@ -978,7 +978,8 @@ function FamilyView({ agentState, onAction, showToast }) {
     useEffect(() => {
         const loadContacts = async () => {
             try {
-                const response = await fetch(`http://localhost:8000/api/family/${elderUserId}/contacts`)
+                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+                const response = await fetch(`${apiBase}/api/family/${elderUserId}/contacts`)
                 if (response.ok) {
                     const data = await response.json()
                     setFamilyContacts(data.contacts || [])
@@ -1006,15 +1007,16 @@ function FamilyView({ agentState, onAction, showToast }) {
         
         const loadMessages = async () => {
             try {
+                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000'
                 const response = await fetch(
-                    `http://localhost:8000/api/family/${elderUserId}/messages?family_member_id=${selectedContact.id}`
+                    `${apiBase}/api/family/${elderUserId}/messages?family_member_id=${selectedContact.id}`
                 )
                 if (response.ok) {
                     const data = await response.json()
                     setMessages(data.messages || [])
                     
                     // Mark messages as read
-                    fetch(`http://localhost:8000/api/family/${elderUserId}/messages/${selectedContact.id}/read?reader_id=${elderUserId}`, {
+                    fetch(`${apiBase}/api/family/${elderUserId}/messages/${selectedContact.id}/read?reader_id=${elderUserId}`, {
                         method: 'POST'
                     }).catch(() => {})
                 }
@@ -1047,7 +1049,8 @@ function FamilyView({ agentState, onAction, showToast }) {
         setMessageText('')
         
         try {
-            await fetch(`http://localhost:8000/api/family/${elderUserId}/messages/${selectedContact.id}`, {
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+            await fetch(`${apiBase}/api/family/${elderUserId}/messages/${selectedContact.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

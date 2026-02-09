@@ -16,7 +16,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import './PhotoSharing.css'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 // ============================================================
 // Main Photo Sharing Component

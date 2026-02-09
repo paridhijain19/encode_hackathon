@@ -16,7 +16,7 @@ import { createClient } from '@anam-ai/js-sdk'
 import { Mic, MicOff, Loader2 } from 'lucide-react'
 import './VoiceAvatar.css'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function VoiceAvatar({ 
     onVoiceInput,        // Callback when voice input is transcribed
