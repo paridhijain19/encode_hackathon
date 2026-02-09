@@ -11,3 +11,5 @@ resend
 pywebpush
 apscheduler
 requests
+httpx
+openai

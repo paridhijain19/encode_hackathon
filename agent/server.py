@@ -320,9 +320,21 @@ app = FastAPI(
 )
 
 # CORS middleware for frontend integration
+# Configure allowed origins from environment or use defaults
+_cors_origins_env = os.getenv("CORS_ORIGINS", "")
+_cors_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "https://amble-sand.vercel.app",
+]
+# Add custom origins from environment variable (comma-separated)
+if _cors_origins_env:
+    _cors_origins.extend([origin.strip() for origin in _cors_origins_env.split(",") if origin.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -621,8 +633,6 @@ async def get_anam_session(request: AnamSessionRequest):
         status_code=503, 
         detail="All Anam API keys exhausted. Please try again later."
     )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==================== USER MANAGEMENT ENDPOINTS ====================
