@@ -45,6 +45,7 @@ venv/
 # Documentation (kept locally, not deployed)
 docs/
 tests/
+database/
 
 # Frontend (exclude for backend-only deployment)
 src/
