@@ -7,15 +7,18 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr/
 *.local
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
@@ -23,16 +26,35 @@ dist-ssr
 *.sln
 *.sw?
 
-agent/_pycache_
-\venv
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.pytest_cache/
+
+# Environment files
 .env
 .env.local
 .env.production
 .env.*.local
-\node_modules
-\__pycache__
-\docs
-\demoforanamai
+
+# Google ADK local session
+.adk/
+
+# Documentation (kept locally, not deployed)
+docs/
+tests/
+
+# Frontend (exclude for backend-only deployment)
+src/
+public/
+index.html
+vite.config.js
+vercel.json
+eslint.config.js
+package.json
+package-lock.json
 
 # Deployment
 .vercel
