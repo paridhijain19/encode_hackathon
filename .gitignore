@@ -1,5 +1,62 @@
+# ==================== Environment Variables ====================
+.env
+.env.local
+.env.production
+.env.*.local
+*.env
+
+# ==================== Python Backend ====================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+*.venv
+
+# Python package files
+*.egg
+*.egg-info/
+dist-python/
+build/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ==================== Frontend (Node/Vite/React) ====================
+# Dependencies
+node_modules/
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Build output
+dist/
+dist-ssr/
+build/
+*.local
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,33 +64,61 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# ==================== IDE & Editor ====================
+# VSCode
 .vscode/*
 !.vscode/extensions.json
-.idea
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# JetBrains IDEs
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# OS Files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-agent/_pycache_
-\venv
-.env
-.env.local
-.env.production
-.env.*.local
-\node_modules
-\__pycache__
-\docs
-\demoforanamai
+# ==================== Documentation (Keep out of deployments) ====================
+docs/
+*.md
+!README.md
 
-# Deployment
+# ==================== Deployment ====================
+.vercel/
 .vercel
-.railway
+.railway/
+.render/
+.netlify/
+
+# ==================== Testing ====================
+coverage/
+.nyc_output/
+*.test.local
+
+# ==================== Temporary & Cache ====================
+.cache/
+.temp/
+.tmp/
+*.tmp
+*.bak
+*.swp
+*~
+
+# ==================== Custom Folders ====================
+demoforanamai/
+demos/
+scratch/
